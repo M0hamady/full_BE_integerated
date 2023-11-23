@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -25,7 +26,7 @@ SECRET_KEY = 'django-insecure-6bje*tq*g8supl0s*%(ik2l4#o0c^$mbmdymg@$x_nsjq@!bm)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['M0hamady.pythonanywhere.com','www.support-constructions.com','www.backend.support-constructions.com' , 'http://localhost']
+ALLOWED_HOSTS = ['M0hamady.pythonanywhere.com','127.0.0.1','www.support-constructions.com','www.backend.support-constructions.com' , 'http://localhost']
 CORS_ORIGIN_WHITELIST = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
@@ -154,5 +155,5 @@ AWS_S3_REGION_NAME = 'us-east-1'  # e.g., 'us-west-1'
 # see https://help.pythonanywhere.com/pages/DjangoStaticFiles for more info
 MEDIA_ROOT = '/home/M0hamady/supportconstruction/media'
 MEDIA_URL = '/media/'
-STATIC_ROOT = '/home/M0hamady/supportconstruction/static'
 STATIC_URL = '/static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR,'static/')]

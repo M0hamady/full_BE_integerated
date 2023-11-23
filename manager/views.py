@@ -12,7 +12,7 @@ from django.urls import reverse_lazy
 from datetime import timedelta
 
 from client.models import Client
-from project.models import DesignStyle, Project, ProjectBasic
+from project.models import CeilingDecoration, DesignStyle, FlooringMaterial, LightingType, Project, ProjectBasic, WallDecorations
 from .forms import Profile_project_UpdateForm, ProfileUpdateForm, RegisterForm
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView
@@ -40,9 +40,10 @@ class Login(LoginView):
 class Profile(LoginRequiredMixin, TemplateView):
     template_name = 'manager/index.html'
     def dispatch(self, request, *args, **kwargs):
-        if not request.user.is_viewer():
+        try:
+            request.user.is_viewer()
             return redirect('viewer_dash')  # Replace 'company' with the URL or name of the page you want to redirect to
-        return super().dispatch(request, *args, **kwargs)
+        except:return super().dispatch(request, *args, **kwargs)
 
 class Projects(LoginRequiredMixin, TemplateView):
     template_name = 'registration/pages/projects.html'
@@ -142,7 +143,7 @@ class ProfileProjectUpdateView(LoginRequiredMixin, View):
     def post(self, request, client_uuid):
         color= request.POST.get('color')
         project = self.get_project(client_uuid)
-        color= DesignColors.objects.get_or_create(name=color)
+        # color= DesignColors.objects.get_or_create(name=color)
         project.dimensions = request.POST.get('dimensions')
         project.meters = request.POST.get('meters')
         project.hight_window = request.POST.get('hight_window')
@@ -180,22 +181,100 @@ def add_color(request,project_uuid):
     print('success')
     return render(request, 'teamViewer/team_partials/colors/list_colors.html', {'project': project})
     
-def add_style(request, project_uuid=None, style_uuid=None):
-    project = get_object_or_404(DesignStyle, uuid=project_uuid)
+def add_style(request, project_uuid, style_uuid):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     # style = request.POST.get("style__add")
     print(style_uuid)
-    design_style, created = get_object_or_404(DesignStyle, name=style_uuid)
-    print(design_style)
+    design_style= get_object_or_404(DesignStyle, name=style_uuid)
     project.design_styles.add(design_style)
     project.save()
-    print('success')
-    return render(request, 'teamViewer/team_partials/colors/list_colors.html', {'project': project})
+    return render(request, 'teamViewer/team_partials/designe_style/list_project_designes.html', {'project': project})
+def delete_design(request, project_uuid, style_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    color = request.POST.get("design")
+    # design_color, created = DesignColors.objects.get_or_create(name=color)
+    # print(design_color.id)
+    project.design_styles.remove(style_id)
+    project.save()
+    success_message = 'Color successfully deleted.'
+    print(success_message,color)
+    return render(request, 'teamViewer/team_partials/designe_style/list_project_designes.html', {'project': project, 'success_message': success_message})
 
+# re[eat]
+def add_ceiling_decorations(request, project_uuid, style_uuid):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    # style = request.POST.get("style__add")
+    design_style= get_object_or_404(CeilingDecoration, name=str(style_uuid).replace("_"," "))
+    print(style_uuid,project)
+    project.ceiling_decoration.add(design_style)
+    project.save()
+    return render(request, 'teamViewer/team_partials/designe_Decoration_Ceiling/list_project_designes.html', {'project': project})
+def delete_ceiling_decorations(request, project_uuid, style_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    project.ceiling_decoration.remove( style_id)
+    project.save()
+    success_message = 'Color successfully deleted.'
+    print(success_message)
+    return render(request, 'teamViewer/team_partials/designe_Decoration_Ceiling/list_project_designes.html', {'project': project, 'success_message': success_message})
+# end repeat
+# re[eat]
+def add_light_type(request, project_uuid, light_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    # style = request.POST.get("style__add")
+    light_type= get_object_or_404(LightingType, name=str(light_id).replace("_"," "))
+    print(light_type,project)
+    project.lighting_type.add(light_type.id)
+    project.save()
+    return render(request, 'teamViewer/team_partials/light_type/list_project_designes.html', {'project': project})
+def delete_light_type(request, project_uuid, light_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    project.lighting_type.remove( light_id)
+    project.save()
+    success_message = 'light successfully deleted.'
+    print(success_message)
+    return render(request, 'teamViewer/team_partials/light_type/list_project_designes.html', {'project': project, 'success_message': success_message})
+# end repeat
+# re[eat]
+def add_wall_decorations(request, project_uuid, wall_id):
+    print(wall_id)
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    # style = request.POST.get("style__add")
+    wall_decorations= get_object_or_404(WallDecorations, name=str(wall_id).replace("_"," "))
+    print(wall_decorations,project)
+    project.wall_decorations.add(wall_decorations.id)
+    project.save()
+    return render(request, 'teamViewer/team_partials/wall_decorations/list_project_designes.html', {'project': project})
+def delete_wall_decorations(request, project_uuid, wall_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    project.wall_decorations.remove( wall_id)
+    project.save()
+    success_message = 'light successfully deleted.'
+    print(success_message)
+    return render(request, 'teamViewer/team_partials/wall_decorations/list_project_designes.html', {'project': project, 'success_message': success_message})
+# end repeat
+# re[eat]
+def add_flooring_material(request, project_uuid, flooring_id):
+    print(flooring_id,"floor",project_uuid)
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    # style = request.POST.get("style__add")
+    flooring_material= get_object_or_404(FlooringMaterial, name=str(flooring_id).replace("_"," "))
+    print(flooring_material,project)
+    project.flooring_material.add(flooring_material.id)
+    project.save()
+    return render(request, 'teamViewer/team_partials/flooring_material/list_project_designes.html', {'project': project})
+def delete_flooring_material(request, project_uuid, flooring_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    project.flooring_material.remove( flooring_id)
+    project.save()
+    success_message = 'light successfully deleted.'
+    print(success_message)
+    return render(request, 'teamViewer/team_partials/flooring_material/list_project_designes.html', {'project': project, 'success_message': success_message})
+# end repeat
 
 def design_styles(request,):
     design_styles = DesignStyle.objects.all()
     context = {'design_styles': design_styles}
-    return render(request, 'teamViewer/team_partials/designe_style/list_designe.html', context)
+    return render(request, 'teamViewer/team_partials/designe_Decoration_Ceiling/list_designe.html', context)
 def delete_color(request, project_uuid,color_uuid):
     project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     color = request.POST.get("color_delete")
@@ -206,15 +285,3 @@ def delete_color(request, project_uuid,color_uuid):
     success_message = 'Color successfully deleted.'
     print(success_message)
     return render(request, 'teamViewer/team_partials/colors/list_colors.html', {'project': project, 'success_message': success_message})
-
-
-def delete_design(request, project_uuid):
-    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
-    color = request.POST.get("design")
-    # design_color, created = DesignColors.objects.get_or_create(name=color)
-    # print(design_color.id)
-    project.design_styles.remove(color)
-    project.save()
-    success_message = 'Color successfully deleted.'
-    print(success_message,color)
-    return render(request, 'teamViewer/team_partials/list_colors.html', {'project': project, 'success_message': success_message})
