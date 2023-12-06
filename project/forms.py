@@ -1,6 +1,7 @@
 from django import forms
 from multiselectfield import MultiSelectFormField
 
+
 class ColorChoicesWidget(forms.CheckboxSelectMultiple):
     template_name = 'admin/color_choices_widget.html'
 

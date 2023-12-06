@@ -24,7 +24,6 @@ class Project(models.Model):
     is_client_approved_3d = models.BooleanField(default=False) 
     is_finished = models.BooleanField(default=False)
     
-    uuid = models.UUIDField( editable=False, unique=True)
 
     def __str__(self):
         return self.name
@@ -99,7 +98,6 @@ class Project(models.Model):
             return (completed_conditions / total_conditions) * 100
         return 0
     @property
-    
     def basic_data_percentage(self):
         return ProjectBasic.objects.get(project = self).project_basic_percentage()
 
@@ -181,6 +179,8 @@ class HightWindow(models.Model):
         super().save(*args, **kwargs)
 # finished data in details adding comments to project
 # starting one option choice
+from django.db import models
+
 
 class ClientOpenToMakeEdit(models.Model):
     CHOICES = [
@@ -317,7 +317,11 @@ class ProjectBasic(models.Model):
     heater = models.ForeignKey(Heater, verbose_name="heater",on_delete=models.SET_NULL,null=True,blank=True)
     is_add_fur_2d = models.BooleanField(verbose_name="do_you_want_to_add_furniture_?",default=True)
     is_boiler = models.BooleanField(verbose_name="is_there_any_boiler?",default=False)
-    count_boiler = models.PositiveBigIntegerField(default=0)
+    count_boiler = models.PositiveBigIntegerField(default=0,null=True)
+    count_kids = models.PositiveBigIntegerField(default=0,null=True)
+    count_kids_male = models.PositiveBigIntegerField(default=0,null=True)
+    count_kids_female = models.PositiveBigIntegerField(default=0,null=True)
+    count_rooms = models.PositiveBigIntegerField(default=0,null=True)
     uuid = models.UUIDField( editable=False, unique=True)
     
     def owner(self):
@@ -645,7 +649,7 @@ class Floor(models.Model):
         # for feedback in feedbacks:
         #     feedback["replies"] = list(ReplyFloor.objects.filter(feedback_floor__uuid=feedback["uuid"]).values("message","site_manager","site_Eng","uuid"))
         #     feedbacks_data.append(feedback)
-        return feedbacks
+        return feedbacks_data
 class ProjectStudy(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     title = models.CharField(max_length=150)

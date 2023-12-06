@@ -104,7 +104,7 @@ class AllDataAPIView(APIView):
         }
 
         return Response(data)
-    
+
 class ProjectBasicCreateAPIView(APIView):
     def post(self, request):
         serializer = ProjectBasicSerializer(data=request.data)
@@ -507,16 +507,70 @@ class ProjectBasicListAPIView(APIView):
         return Response(serializer.data)
     
 from rest_framework.parsers import MultiPartParser, FormParser
+def handle_form_submission(request):
+    if request.method == 'POST':
+        project_uuid = request.POST.get('project_uuid')
+        file = request.FILES.get('file')
+        image = request.FILES.get('image')
 
+        # Process the form data here
+        # ...
+
+        return HttpResponse("Form submission successful!")
+    else:
+        return HttpResponse("Invalid request method.")
+from django.http import JsonResponse
+def update_file(request):
+    if request.method == 'POST':
+        file_id = request.POST.get('file_id')
+        is_checked = request.POST.get('is_checked')
+        print(request.POST)
+        projectFile = ProjectFile.objects.get(uuid=file_id)
+        if is_checked:
+            projectFile.can_client_sea = True 
+            projectFile.save()
+        # Update the file data based on file_id and is_checked
+        print(projectFile.can_client_sea)
+        # Return a JSON response indicating success
+        return JsonResponse({'success': True})
+
+    # Return a JSON response indicating failure
+    return JsonResponse({'success': False})
+def upload_file(request):
+    if request.method == 'POST':
+        project_uuid = request.POST.get('project_uuid')
+        file = request.FILES.get('file')
+
+        if not project_uuid:
+            return JsonResponse({'success': False, 'message': 'Project UUID is required.'})
+
+        if not file:
+            return JsonResponse({'success': False, 'message': 'File is required.'})
+
+        
+        try:
+            project_file = ProjectFile.objects.create(
+                
+                project_id=ProjectBasic.objects.get(uuid=project_uuid).id,
+                name=file.name,
+                file=file,
+            )
+            # project_file.save()
+            return JsonResponse({'success': True, 'message': 'File uploaded successfully!'})
+        except ValidationError as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+
+    return JsonResponse({'success': False, 'message': 'Invalid request method.'})
 
 class ProjectUploadAPIView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
+        print(request.data.get('project_uuid'))
         project_id = request.data.get('project_uuid')
         file = request.FILES.get('file')
         image = request.FILES.get('image')
-
+        print(project_id)
         # Save file and image to the project
         try:
             project = Project.objects.get(client__uuid=project_id)

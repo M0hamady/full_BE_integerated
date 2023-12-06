@@ -78,8 +78,8 @@ class Client(models.Model):
     def get_profile_completion_actions(self):
         actions = []
 
-        if not self.is_active:
-            actions.append("Activate the profile")
+        # if not self.is_active:
+        #     actions.append("Activate the profile")
 
         if not self.is_viewer_viewed:
             actions.append("View the profile")
@@ -151,7 +151,15 @@ class Client(models.Model):
         total_conditions = sum(conditions.values())
         print(total_conditions)
         return int((completed_conditions / total_conditions) * 100)
- 
+    def whatsapp_num(self):
+        return self.number[1:]
+    def generate_welcome_message(self):
+        message = f"""Hello {self.name}!
+
+Welcome to Support Construction Company.
+
+Your access key is: {self.uuid}"""
+        return message
     @property
     def calculate_data_completion_percentage(self):
         conditions = {

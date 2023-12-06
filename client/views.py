@@ -417,6 +417,17 @@ class ClientRegistrationView(APIView):
                 serializer.validated_data['number']
             )
             client_data = ClientSerializer(client).data
+            project= Project.objects.create(
+                client=client,
+                name=client.name,
+
+            )
+            project.save()
+            project_basic=ProjectBasic.objects.create (
+                project=project,
+
+            )
+            project_basic.save()
             return Response(client_data, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

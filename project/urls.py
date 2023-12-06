@@ -1,5 +1,5 @@
 
-from .views import AllDataAPIView, CommentImageAPIView, CommentImageDetailAPIView, DesignColorsCreateAPIView, FeedbackDetailView, FeedbackListCreateView, ProjectBasicCreateAPIView, ProjectFileAPIView, ProjectFileDeleteAPIView, ProjectImageDeleteAPIView, ProjectImagesAPIView, ProjectStudyAPIView, ProjectStudyDetailView, ProjectStudyListCreateView, ProjectUploadAPIView, ReplyDetailView, ReplyListCreateView, create_comment, create_comment_options, create_notes, create_project_study, create_project_study_feeds, create_project_study_feeds_reply, get_project_study, project_basic_retrieve, update_basic_project, update_can_sea, update_can_sea_file, update_client_approved
+from .views import AllDataAPIView, CommentImageAPIView, CommentImageDetailAPIView, DesignColorsCreateAPIView, FeedbackDetailView, FeedbackListCreateView, ProjectBasicCreateAPIView, ProjectFileAPIView, ProjectFileDeleteAPIView, ProjectImageDeleteAPIView, ProjectImagesAPIView, ProjectStudyAPIView, ProjectStudyDetailView, ProjectStudyListCreateView, ProjectUploadAPIView, ReplyDetailView, ReplyListCreateView, create_comment, create_comment_options, create_notes, create_project_study, create_project_study_feeds, create_project_study_feeds_reply, get_project_study, handle_form_submission, project_basic_retrieve, update_basic_project, update_can_sea, update_can_sea_file, update_client_approved, update_file, upload_file
 from django.urls import path
 
 
@@ -11,6 +11,9 @@ urlpatterns = [
     path('update-basic-project/<str:viewer_uuid>', update_basic_project, name='project-basic-update'),
     path('upload/', ProjectUploadAPIView.as_view(), name='project-upload'),
     path('files/', ProjectFileAPIView.as_view(), name='project-files'),
+    path('form-submission/', handle_form_submission, name='form-submission'),
+    path('upload-file/', upload_file, name='upload-file'),
+    path('update-file/', update_file, name='update_file'),
     path('images/', ProjectImagesAPIView.as_view(), name='project-images'),
     path('image/update-can-sea/<uuid:uuid>/', update_can_sea,name='update_can_sea'),
     path('file/update-can-sea/<uuid:uuid>/', update_can_sea_file,name='update_can_sea_file'),
@@ -18,7 +21,6 @@ urlpatterns = [
     path('delete/files/', ProjectFileDeleteAPIView.as_view(), name='delete-project-file'),
     path('delete/image/', ProjectImageDeleteAPIView.as_view(), name='delete-project-image'),
     path('design-colors/create/', DesignColorsCreateAPIView.as_view(), name='design-colors-create'),
-    
     path('images/comments/', CommentImageAPIView.as_view(), name='comment-image-list-create'),
     path('image/comments/<uuid:uuid>/', CommentImageDetailAPIView.as_view(), name='comment-image-detail'),
     path('comments/create/', create_comment, name='create_comment'),

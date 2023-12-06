@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'technical',
     'corsheaders',
     'project',
+    # 'storages',
     'manager',
     'widget_tweaks',
 ]

@@ -12,7 +12,7 @@ from django.urls import reverse_lazy
 from datetime import timedelta
 
 from client.models import Client
-from project.models import CeilingDecoration, DesignStyle, FlooringMaterial, LightingType, Project, ProjectBasic, WallDecorations
+from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, DesignStyle, DoorProvided, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ToiletType, WallDecorations
 from .forms import Profile_project_UpdateForm, ProfileUpdateForm, RegisterForm
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView
@@ -64,16 +64,17 @@ class ClientFilterView(TemplateView):
             elif query2 =="needs_actions":
                 clients_neural = Client.objects.all()
                 clients= [client for client in clients_neural if client.calculate_data_completion_percentage >= 30 ]
-                
+
             elif query2 =="in_process":
                 clients_neural = Client.objects.all()
                 clients= [client for client in clients_neural if client.calculate_data_completion_percentage <= 30 and client.calculate_data_completion_percentage >= 50]
-                
+
         elif query1 == "meetings":
             if query2 =="today":
                 today = timezone.now().date()
-                clients = Client.objects.filter(meeting_time=today)
-                
+                print(today)
+                clients = Client.objects.filter(meeting_time__date=today)
+                print(clients,[client.meeting_time for client in Client.objects.all()])
             elif query2 =="this_week":
                 today = timezone.now().date()
                 start_of_week = today - timedelta(days=today.weekday())
@@ -85,14 +86,19 @@ class ClientFilterView(TemplateView):
         elif query1 == "tech_team":
             if query2 =="clients":
                 clients = Client.objects.all()
+                clients = [clients_d for clients_d in clients if ProjectBasic.objects.get(project__client =clients_d).project_basic_percentage() >10 ]
             elif query2 =="needs_action":
                 clients_neural = Client.objects.all()
                 clients= [client for client in clients_neural if "markting"   in client.action_needed().split()  ]
+                clients = [clients_d for clients_d in clients if ProjectBasic.objects.get(project__client =clients_d).project_basic_percentage() >30 ]
+
             elif query2 =="in_process":
                 clients_neural = Client.objects.all()
                 clients= [client for client in clients_neural if "manager"   in client.action_needed().split()  ]
-                
-        
+                clients = [clients_d for clients_d in clients if ProjectBasic.objects.get(project__client =clients_d).project_basic_percentage() >60 ]
+
+
+
 
         # Filter the Client objects based on the queries
         # clients = Client.objects.filter(query1=query1, query2=query2)
@@ -101,7 +107,7 @@ class ClientFilterView(TemplateView):
         context['query1'] = query1
         context['query2'] = query2
         return context
-    
+  
 
 def profile_update_view(request, client_uuid):
     client = get_object_or_404(Client, uuid=client_uuid)
@@ -132,8 +138,46 @@ class ProfileProjectUpdateView(LoginRequiredMixin, View):
             client = Client.objects.get(uuid=client_uuid)
             project = ProjectBasic.objects.get(project__uuid=Project.objects.get(client=client).uuid)
         except (Client.DoesNotExist, Project.DoesNotExist, ProjectBasic.DoesNotExist):
-            project = ProjectBasic.objects.get( uuid=client_uuid)
+            try:
+                project = ProjectBasic.objects.get(uuid=client_uuid)
+            except:
+                return redirect('viewer_dash')
         return project
+
+    def handle_attributes(self, request, project):
+        attributes = ['location', 'dimensions', 'meters', 'hight_window', 'is_add_fur_2d', 'is_boiler', 'count_boiler', 'count_rooms', 'count_kids', 'count_kids_male', 'count_kids_female']
+        for attribute in attributes:
+            value = request.POST.get(attribute)
+            print(attribute,value)
+            if attribute == 'is_add_fur_2d' and value is None or attribute == 'is_boiler' and value is None:
+                value =False
+            if value is not None:
+                if attribute == 'is_add_fur_2d' or attribute == 'is_boiler':
+                    print(value,4747,attribute)
+                    # value = value.lower() == 'true'
+                    setattr(project, attribute, value)
+                setattr(project, attribute, str(value))
+
+    def handle_foreign_keys(self, request, project):
+        foreign_key_fields = {
+            'clientOpenToMakeEdit': ClientOpenToMakeEdit,
+            'plumbingEstablished': PlumbingEstablished,
+            'ceilingGypsumBoard': CeilingGypsumBoard,
+            'doorProvided': DoorProvided,
+            'ceramicExisted': CeramicExisted,
+            'toiletType': ToiletType,
+            'heater': Heater
+        }
+        for attribute, model_class in foreign_key_fields.items():
+            value = request.POST.get(attribute)
+            if value is not None and value != "":
+                try:
+                    instance = get_object_or_404(model_class, id=int(value))
+                    setattr(project, attribute, instance)
+                except ValueError:
+                    # Handle the case when the value cannot be converted to an integer
+                    # You can choose to ignore it, raise an error, or handle it differently
+                    pass
 
     def get(self, request, client_uuid):
         project = self.get_project(client_uuid)
@@ -141,22 +185,13 @@ class ProfileProjectUpdateView(LoginRequiredMixin, View):
         return render(request, self.template_name, {'form': form, 'project': project})
 
     def post(self, request, client_uuid):
-        color= request.POST.get('color')
         project = self.get_project(client_uuid)
-        # color= DesignColors.objects.get_or_create(name=color)
-        project.dimensions = request.POST.get('dimensions')
-        project.meters = request.POST.get('meters')
-        project.hight_window = request.POST.get('hight_window')
-        # project.is_add_fur_2d = request.POST.get('is_add_fur_2d')
-        # project.is_boiler = request.POST.get('is_boiler')
-        project.count_boiler = request.POST.get('count_boiler')
-        # project.count_rooms = request.POST.get('count_rooms')
-        project.count_kids = request.POST.get('count_kids')
-        project.count_kids_male = request.POST.get('count_kids_male')
-        project.count_kids_female = request.POST.get('count_kids_female')
+        self.handle_attributes(request, project)
+        self.handle_foreign_keys(request, project)
         project.save()
+        print(request.POST)
+
         form = Profile_project_UpdateForm(instance=project)
-        
         return render(request, self.template_name, {'form': form, 'project': project})
 class RegisterView(FormView):
     form_class = RegisterForm
@@ -188,7 +223,7 @@ def add_style(request, project_uuid, style_uuid):
     design_style= get_object_or_404(DesignStyle, name=style_uuid)
     project.design_styles.add(design_style)
     project.save()
-    return render(request, 'teamViewer/team_partials/designe_style/list_project_designes.html', {'project': project})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,"url_name_delete":"/client/design/delete/",'tag':'tag1','list_options':project.design_styles.all(),})
 def delete_design(request, project_uuid, style_id):
     project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     color = request.POST.get("design")
@@ -198,7 +233,7 @@ def delete_design(request, project_uuid, style_id):
     project.save()
     success_message = 'Color successfully deleted.'
     print(success_message,color)
-    return render(request, 'teamViewer/team_partials/designe_style/list_project_designes.html', {'project': project, 'success_message': success_message})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,'list_options':project.design_styles.all(),"url_name_delete":"/client/design/delete/",'tag':'tag1', 'success_message': success_message})
 
 # re[eat]
 def add_ceiling_decorations(request, project_uuid, style_uuid):
@@ -208,14 +243,14 @@ def add_ceiling_decorations(request, project_uuid, style_uuid):
     print(style_uuid,project)
     project.ceiling_decoration.add(design_style)
     project.save()
-    return render(request, 'teamViewer/team_partials/designe_Decoration_Ceiling/list_project_designes.html', {'project': project})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,"url_name_delete":"/client/ceiling/delete/",'tag':'tag2','list_options':project.ceiling_decoration.all(),})
 def delete_ceiling_decorations(request, project_uuid, style_id):
     project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     project.ceiling_decoration.remove( style_id)
     project.save()
-    success_message = 'Color successfully deleted.'
+    success_message = 'ceiling deleted.'
     print(success_message)
-    return render(request, 'teamViewer/team_partials/designe_Decoration_Ceiling/list_project_designes.html', {'project': project, 'success_message': success_message})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,'list_options':project.ceiling_decoration.all(),"url_name_delete":"/client/ceiling/delete/",'tag':'tag2', 'success_message': success_message})
 # end repeat
 # re[eat]
 def add_light_type(request, project_uuid, light_id):
@@ -225,14 +260,14 @@ def add_light_type(request, project_uuid, light_id):
     print(light_type,project)
     project.lighting_type.add(light_type.id)
     project.save()
-    return render(request, 'teamViewer/team_partials/light_type/list_project_designes.html', {'project': project})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,"url_name_delete":"/client/light_type/delete/",'tag':'tag3','list_options':project.lighting_type.all(),})
 def delete_light_type(request, project_uuid, light_id):
     project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     project.lighting_type.remove( light_id)
     project.save()
-    success_message = 'light successfully deleted.'
+    success_message = 'lighting_type successfully deleted.'
     print(success_message)
-    return render(request, 'teamViewer/team_partials/light_type/list_project_designes.html', {'project': project, 'success_message': success_message})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,'list_options':project.lighting_type.all(),"url_name_delete":"/client/lighting_type/delete/",'tag':'tag3', 'success_message': success_message})
 # end repeat
 # re[eat]
 def add_wall_decorations(request, project_uuid, wall_id):
@@ -243,14 +278,14 @@ def add_wall_decorations(request, project_uuid, wall_id):
     print(wall_decorations,project)
     project.wall_decorations.add(wall_decorations.id)
     project.save()
-    return render(request, 'teamViewer/team_partials/wall_decorations/list_project_designes.html', {'project': project})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,"url_name_delete":"/client/wall_decoration/delete/",'tag':'tag4','list_options':project.wall_decorations.all(),})
 def delete_wall_decorations(request, project_uuid, wall_id):
     project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     project.wall_decorations.remove( wall_id)
     project.save()
-    success_message = 'light successfully deleted.'
+    success_message = 'wall_decoration deleted.'
     print(success_message)
-    return render(request, 'teamViewer/team_partials/wall_decorations/list_project_designes.html', {'project': project, 'success_message': success_message})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,'list_options':project.wall_decorations.all(),"url_name_delete":"/client/wall_decoration/delete/",'tag':'tag4', 'success_message': success_message})
 # end repeat
 # re[eat]
 def add_flooring_material(request, project_uuid, flooring_id):
@@ -261,14 +296,32 @@ def add_flooring_material(request, project_uuid, flooring_id):
     print(flooring_material,project)
     project.flooring_material.add(flooring_material.id)
     project.save()
-    return render(request, 'teamViewer/team_partials/flooring_material/list_project_designes.html', {'project': project})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,"url_name_delete":"/client/flooring/delete/",'tag':'tag5','list_options':project.flooring_material.all(),})
 def delete_flooring_material(request, project_uuid, flooring_id):
     project = get_object_or_404(ProjectBasic, uuid=project_uuid)
     project.flooring_material.remove( flooring_id)
     project.save()
-    success_message = 'light successfully deleted.'
+    success_message = 'flooring successfully deleted.'
     print(success_message)
-    return render(request, 'teamViewer/team_partials/flooring_material/list_project_designes.html', {'project': project, 'success_message': success_message})
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,'list_options':project.flooring_material.all(),"url_name_delete":"/client/flooring/delete/",'tag':'tag5', 'success_message': success_message})
+# end repeat
+# re[eat]
+def add_furniture_details(request, project_uuid, furniture_id):
+    print(furniture_id,"floor",project_uuid)
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    # style = request.POST.get("style__add")
+    furniture= get_object_or_404(Furniture, name=str(furniture_id).replace("_"," "))
+    print(furniture,project)
+    project.furniture.add(furniture.id)
+    project.save()
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,"url_name_delete":"/client/furniture/delete/",'tag':'tag6','list_options':project.furniture.all(),})
+def delete_furniture_details(request, project_uuid, furniture_id):
+    project = get_object_or_404(ProjectBasic, uuid=project_uuid)
+    project.furniture.remove( furniture_id)
+    project.save()
+    success_message = 'furniture successfully deleted.'
+    print(success_message)
+    return render(request, 'teamViewer/widjet/list_obtions.html', {'project': project,'list_options':project.furniture.all(),"url_name_delete":"/client/furniture/delete/",'tag':'tag6', 'success_message': success_message})
 # end repeat
 
 def design_styles(request,):
