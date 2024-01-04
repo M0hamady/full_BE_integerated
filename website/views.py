@@ -31,6 +31,15 @@ from django.views.generic import FormView, TemplateView
 from django.shortcuts import redirect
 from django.shortcuts import render
 from .forms import EmployeeForm, PicUploadForm
+class ClientUuid(TemplateView):
+    template_name = 'website/access_client.html'
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        uuid = kwargs['uuid']
+        context['uuid'] = uuid
+        return context
+
+
 class PicUploadView(TemplateView):
     template_name = 'website/pic_upload.html'
 

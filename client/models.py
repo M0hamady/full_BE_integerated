@@ -163,7 +163,7 @@ class Client(models.Model):
 
 Welcome to Support Construction Company.
 
-Your access key is: {self.uuid}"""
+to get your access visit our provider: https://www.backend.support-constructions.com/website/ClientUuid/{self.uuid}"""
         return message
     @property
     def calculate_data_completion_percentage(self):
