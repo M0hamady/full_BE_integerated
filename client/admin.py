@@ -1,9 +1,48 @@
 from django.contrib import admin
+from .models import Client, Payment
+from project.models import  Project, ProjectBasic, ProjectFile, ProjectImage
+admin.site.register(Payment)
 
-from client.models import Client
+class ProjectBasicDetailsInline(admin.StackedInline):
+    model = ProjectBasic
+    max_num = 1
+    verbose_name_plural = 'Basic Details'
+
+class ProjectImageInline(admin.TabularInline):
+    model = ProjectImage
+
+class ProjectFileInline(admin.TabularInline):
+    model = ProjectFile
+    extra = 1
+    can_delete = False
+    verbose_name_plural = 'ProjectFiles'
+
+class ProjectInline(admin.TabularInline):
+    model = Project
+    inlines = [ProjectBasicDetailsInline, ProjectFileInline, ProjectImageInline]
+    extra = 0
+    can_delete = False
+    verbose_name_plural = 'Project'
 
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ('name', 'uuid' )
-    search_fields = ('name','uuid')
-# Register your models here.
-admin.site.register(Client,ClientAdmin)
+    list_display = ('name', 'email', 'created_date')
+    search_fields = ('name', 'email')
+    list_filter = ('is_active', 'created_date')
+    readonly_fields = ('created_date',)
+    inlines = [ProjectInline,] 
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if obj and obj.project_client():
+            fields += ('project_data',) # Include the associated project data field
+        return fields
+
+    def project_data(self, obj):
+        project = obj.project_client()
+        if project:
+            return f"Project Name: {project.name}\nProject Description: {project.description}"
+        return "No associated project found."
+
+    project_data.short_description = 'Associated Project'
+
+admin.site.register(Client)

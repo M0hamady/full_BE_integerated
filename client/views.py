@@ -8,6 +8,7 @@ from django.db.models import Case, F, FloatField, When
 from django.db.models.functions import Cast
 # Create your views here.
 from rest_framework import generics, status
+from project.slck import create_channel_and_get_invite_link, send_slack_notification
 from supportconstruction import settings
 from teamview.models import Viewer
 from technical.models import Technical
@@ -116,6 +117,18 @@ def client_create_view(request,viewer_uuid):
         "project" : project_serializer.data,
         # "basic_project" : basic_project_serializer.data,
     }
+    current_time = datetime.now().strftime("%Y-%m-%d / %H:%M:%S")
+    channel = "#new-customers"
+    name_message = f"""*تمت إضافة عميل جديد*
+        • الاسم: {client_serializer.data['name']}
+        • التاريخ والوقت: {current_time}
+        • يمكنك الاتصال على الرقم: {client_serializer.data['number']}
+        • ومتابعه  إرسال البريد الإلكتروني عبر : {client_serializer.data['email']}
+        • ومتابعه  بينات العميل : https://www.backend.support-constructions.com/client/{client_serializer.data['uuid']}/update/
+        • ومتابعة اجراءت العقد من خلال  : https://www.backend.support-constructions.com//project/{client_serializer.data['uuid']}/update
+
+"""
+    send_slack_notification(channel, name_message)
     return Response(context, status=status.HTTP_201_CREATED)
 # class ClientCreateView(generics.CreateAPIView):
 #     queryset = Client.objects.all()
@@ -406,6 +419,60 @@ class ClientByUUIDView(APIView):
             return Response({'error': 'Client not found'}, status=status.HTTP_404_NOT_FOUND)
         
 
+import json
+def call_number(number):
+    # Logic to make a call to the number
+    call_message = f"Calling number: {number}"
+    return call_message
+def send_mail_via_slack(email):
+    # Logic to send email via Slack
+    message = f"Sending email to {email} via Slack"
+    return message
+def handle_client_data(client_data):
+    channel = "#new-customers"
+    current_time = datetime.now().strftime("%Y-%m-%d / %H:%M:%S")
+    name_message = ""
+    uuid = client_data['uuid']
+    if client_data.get('name'):
+        # Perform action for name
+        name = client_data['name']
+        name_message = f"""*تمت إضافة عميل جديد*
+        • الاسم: {name}
+        • التاريخ والوقت: {current_time}"""
+
+    if client_data.get('number'):
+        # Perform action for phone number
+        number = client_data['number']
+        name_message = f"""*تمت إضافة عميل جديد*
+        • الاسم: {name}
+        • التاريخ والوقت: {current_time}
+        • يمكنك الاتصال على الرقم: {number}"""
+
+    if client_data.get('email'):
+        # Perform action for email
+        email = client_data['email']
+        name_message = f"""*تمت إضافة عميل جديد*
+        • الاسم: {name}
+        • التاريخ والوقت: {current_time}
+        • يمكنك الاتصال على الرقم: {number}
+        • ومتابعه  إرسال البريد الإلكتروني عبر : {email}
+        • ومتابعه  بينات العميل : https://www.backend.support-constructions.com/client/{uuid}/update/
+        • ومتابعة اجراءت العقد من خلال  : https://www.backend.support-constructions.com/client/project/{uuid}/update
+
+"""
+
+    send_slack_notification(channel, name_message)
+    channel_name = '#' +name
+
+    # create_channel_and_get_invite_link(channel_name)
+    
+
+    # Return the client_data for reusability
+    return client_data
+
+    
+    # Return the client_data for reusability
+    return client_data
 class ClientRegistrationView(APIView):
     def post(self, request):
         serializer = ClientRegistrationSerializer(data=request.data)
@@ -428,6 +495,7 @@ class ClientRegistrationView(APIView):
 
             )
             project_basic.save()
+            handle_client_data(client_data)
             return Response(client_data, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -540,6 +608,7 @@ class ClientRegistrationAPIView(APIView):
                 return Response({'error': 'Mobile or email is required'}, status=status.HTTP_400_BAD_REQUEST)
             
             serializer.save()
+            handle_client_data(serializer)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

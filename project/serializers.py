@@ -12,6 +12,60 @@ import uuid
 from teamview.models import Viewer
 from technical.models import Technical
 
+class ProjectImage2DSerializer(serializers.ModelSerializer):
+    project = serializers.SerializerMethodField()
+    client = serializers.SerializerMethodField()
+    class Meta:
+        model = ProjectImage2D
+        fields = '__all__'
+        read_only_fields = ('uuid', 'created_at')
+
+    def create(self, validated_data):
+        image = validated_data.pop('image')
+        project_image = ProjectImage2D.objects.create(image=image, **validated_data)
+        return project_image
+    def get_project(self,obj):
+        return obj.project.uuid
+    def get_client(self,obj):
+        return obj.project.client.uuid
+class ReplyImage2DSerializer(serializers.ModelSerializer):
+    comment = serializers.SerializerMethodField()
+    class Meta:
+        model = ReplyCommentImage2D
+        fields = ('uuid', 'comment', 'text', 'created_at')
+    def get_comment(self,obj):
+        return obj.comment.uuid
+
+class CommentImage2DSerializer(serializers.ModelSerializer):
+    replies = ReplyImage2DSerializer(many=True, read_only=True)
+    project_image = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CommentImage2D
+        fields = ('uuid', 'project_image', 'text', 'created_at', 'replies')
+    def get_project_image(self,obj):
+        return obj.project_image.uuid
+    
+
+class FeedbackFloorSerializer(serializers.ModelSerializer):
+    floor_uuid = serializers.UUIDField(write_only=True)  # Added field for floor UUID
+    floor = serializers.PrimaryKeyRelatedField(queryset=Floor.objects.all(), required=False)
+    class Meta:
+        model = FeedbackFloor
+        fields = ['id', 'floor', 'message', 'status', 'uuid', 'is_accepted', 'is_seen', 'floor_uuid']
+        read_only_fields = ['uuid']
+    def validate(self, attrs):
+        if 'floor_uuid' in attrs and 'floor' in attrs:
+            raise serializers.ValidationError("Both floor and floor_uuid cannot be provided at the same time.")
+        return attrs
+    def create(self, validated_data):
+        floor_uuid = validated_data.pop('floor_uuid')
+        try:
+            floor = Floor.objects.get(uuid=floor_uuid)
+        except Floor.DoesNotExist:
+            raise serializers.ValidationError("Invalid floor UUID")
+        validated_data['floor'] = floor
+        return super().create(validated_data)
 class WallDecorationSerializer(serializers.ModelSerializer):
     class Meta:
         model = WallDecorations
@@ -233,7 +287,7 @@ class ProjectSerializer_client(serializers.ModelSerializer):
                     "owner":str(comment.owner),
                     "created_at":str(comment.created_at)
                 })
-            list_url.append({"image":image.image.url,"uuid":image.uuid,'comments':list_comments})
+            list_url.append({"image":image.image.url,"uuid":image.uuid,"name":image.name,'comments':list_comments})
             
 
         return list_url
@@ -261,20 +315,21 @@ class ProjectSerializer_client(serializers.ModelSerializer):
 class BasicProjectSerializer(serializers.ModelSerializer):
     # design_styles = serializers.SerializerMethodField()
     project__uuid = serializers.SerializerMethodField()
-    # design_colors = serializers.SerializerMethodField()
-    # ceiling_decoration = serializers.SerializerMethodField()
-    # lighting_type = serializers.SerializerMethodField()
-    # wall_decorations = serializers.SerializerMethodField()
-    # flooring_material = serializers.SerializerMethodField()
-    # furniture = serializers.SerializerMethodField()
-    # hight_window = serializers.SerializerMethodField()
-    # clientOpenToMakeEdit = serializers.SerializerMethodField()
-    # Plumbing_established = serializers.SerializerMethodField()
-    # Ceiling_gypsum_board = serializers.SerializerMethodField()
-    # Door_provided = serializers.SerializerMethodField()
-    # Ceramic_existed = serializers.SerializerMethodField()
-    # toilet_type = serializers.SerializerMethodField()
-    # heater = serializers.SerializerMethodField()
+    design_colors = serializers.SerializerMethodField()
+    design_styles = serializers.SerializerMethodField()
+    ceiling_decoration = serializers.SerializerMethodField()
+    lighting_type = serializers.SerializerMethodField()
+    wall_decorations = serializers.SerializerMethodField()
+    flooring_material = serializers.SerializerMethodField()
+    furniture = serializers.SerializerMethodField()
+    hight_window = serializers.SerializerMethodField()
+    clientOpenToMakeEdit = serializers.SerializerMethodField()
+    Plumbing_established = serializers.SerializerMethodField()
+    Ceiling_gypsum_board = serializers.SerializerMethodField()
+    Door_provided = serializers.SerializerMethodField()
+    Ceramic_existed = serializers.SerializerMethodField()
+    toilet_type = serializers.SerializerMethodField()
+    heater = serializers.SerializerMethodField()
     # comments_options = serializers.SerializerMethodField()
     client_project_data = serializers.SerializerMethodField()
     
@@ -413,50 +468,52 @@ class BasicProjectSerializer(serializers.ModelSerializer):
     #       return DesignStyleSerializer(obj.design_styles,many= True).data
     def get_design_colors(self,obj):
           return DesignColorsSerializer(obj.design_colors,many= True).data
-    # def get_ceiling_decoration(self,obj):
-    #       return CeilingDecorationSerializer(obj.ceiling_decoration,many= True).data
-    # def get_lighting_type(self,obj):
-    #       return CeilingDecorationSerializer(obj.lighting_type,many= True).data
-    # def get_wall_decorations(self,obj):
-    #       return WallDecorationSerializer(obj.wall_decorations,many= True).data
-    # def get_flooring_material(self,obj):
-    #       return FlooringMaterialSerializer(obj.flooring_material,many= True).data
-    # def get_furniture(self,obj):
-    #       return FurnitureSerializer(obj.furniture,many= True).data
+    def get_design_styles(self,obj):
+          return DesignStyleSerializer(obj.design_styles,many= True).data
+    def get_ceiling_decoration(self,obj):
+          return CeilingDecorationSerializer(obj.ceiling_decoration,many= True).data
+    def get_lighting_type(self,obj):
+          return CeilingDecorationSerializer(obj.lighting_type,many= True).data
+    def get_wall_decorations(self,obj):
+          return WallDecorationSerializer(obj.wall_decorations,many= True).data
+    def get_flooring_material(self,obj):
+          return FlooringMaterialSerializer(obj.flooring_material,many= True).data
+    def get_furniture(self,obj):
+          return FurnitureSerializer(obj.furniture,many= True).data
     def get_project__uuid(self,obj):
           return obj.project.uuid
-    # def get_hight_window(self,obj):
-    #       try:
-    #         return obj.hight_window + ": meter"
-    #       except: return ""
-    # def get_clientOpenToMakeEdit(self,obj):
-    #       try:
-    #         return ClientOpenToMakeEditSerializer( obj.clientOpenToMakeEdit).data
-    #       except: return ""
-    # def get_Plumbing_established(self,obj):
-    #       try:
-    #         return PlumbingEstablishedSerializer( obj.plumbingEstablished).data
-    #       except: return ""
-    # def get_Ceiling_gypsum_board(self,obj):
-    #       try:
-    #         return CeilingGypsumBoardSerializer( obj.ceilingGypsumBoard).data
-    #       except: return ""
-    # def get_Door_provided(self,obj):
-    #       try:
-    #         return DoorProvidedSerializer( obj.doorProvided).data
-    #       except: return ""
-    # def get_Ceramic_existed(self,obj):
-    #       try:
-    #         return CeramicExistedSerializer( obj.ceramicExisted).data
-    #       except: return ""
-    # def get_toilet_type(self,obj):
-    #       try:
-    #         return ToiletTypeSerializer( obj.toiletType).data
-    #       except: return ""
-    # def get_heater(self,obj):
-    #       try:
-    #         return HeaterSerializer( obj.heater).data
-    #       except: return ""
+    def get_hight_window(self,obj):
+          try:
+            return obj.hight_window + ": meter"
+          except: return ""
+    def get_clientOpenToMakeEdit(self,obj):
+          try:
+            return ClientOpenToMakeEditSerializer( obj.clientOpenToMakeEdit).data
+          except: return ""
+    def get_Plumbing_established(self,obj):
+          try:
+            return PlumbingEstablishedSerializer( obj.plumbingEstablished).data
+          except: return ""
+    def get_Ceiling_gypsum_board(self,obj):
+          try:
+            return CeilingGypsumBoardSerializer( obj.ceilingGypsumBoard).data
+          except: return ""
+    def get_Door_provided(self,obj):
+          try:
+            return DoorProvidedSerializer( obj.doorProvided).data
+          except: return ""
+    def get_Ceramic_existed(self,obj):
+          try:
+            return CeramicExistedSerializer( obj.ceramicExisted).data
+          except: return ""
+    def get_toilet_type(self,obj):
+          try:
+            return ToiletTypeSerializer( obj.toiletType).data
+          except: return ""
+    def get_heater(self,obj):
+          try:
+            return HeaterSerializer( obj.heater).data
+          except: return ""
 
 
 

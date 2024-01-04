@@ -1,9 +1,11 @@
+import logging
 from django.http import HttpResponse, HttpResponseBadRequest
 from project.models import *
 from project.serializers import *
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Sum
 
 class AllDataAPIView(APIView):
     def get(self, request):
@@ -217,30 +219,56 @@ class CommentImageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         # Perform any additional actions before deleting the comment
         instance.delete()
+
+
+def get_comments_by_image_and_client(request):
+    image_uuid = request.GET.get('image_uuid')
+    client_uuid = request.GET.get('client_uuid')
+
+    if not image_uuid or not client_uuid:
+        return JsonResponse({'error': 'Both image_uuid and client_uuid are required.'}, status=400)
+
+    comments = Comment_image.objects.filter(image__uuid=image_uuid, client__uuid=client_uuid)
+
+    data = []
+    for comment in comments:
+        if not comment.is_reply_1:
+            comment_data = {
+                'image_uuid': comment.image.uuid,
+                'uuid': comment.uuid,
+                'owner': comment.owner.uuid,
+                'content': comment.content,
+                'is_reply': comment.is_reply_1,
+                'replies': [],
+                'created_at': comment.created_at
+            }
+            data.append(comment_data)
+        else:
+            parent = comment.parent_uuid()
+            for image in data:
+                if image['uuid'] == parent:
+                    image['replies'].append({
+                'image_uuid': comment.image.uuid,
+                'owner': comment.owner.uuid,
+                'content': comment.content,
+                'created_at': comment.created_at
+            })
+
+    return JsonResponse({'comments': data}, status=200)
 class CommentImageAPIView(generics.ListCreateAPIView):
     serializer_class = CommentImageSerializer
-    def get(self, request):
-        comments = Comment_image.objects.filter(parent=None)
-        serializer = CommentImageSerializer(comments, many=True)
-        return Response(serializer.data)
+
     def get_queryset(self):
         queryset = Comment_image.objects.all()
-
+        image_uuid = self.request.query_params.get('image_uuid')
         client_uuid = self.request.query_params.get('client_uuid')
-        if client_uuid:
+
+        if image_uuid and client_uuid:
+            queryset = queryset.filter(image__uuid=image_uuid, client__uuid=client_uuid)
+        elif image_uuid:
+            queryset = queryset.filter(image__uuid=image_uuid)
+        elif client_uuid:
             queryset = queryset.filter(client__uuid=client_uuid)
-
-        designer_uuid = self.request.query_params.get('designer_uuid')
-        if designer_uuid:
-            queryset = queryset.filter(designer__uuid=designer_uuid)
-
-        viewer_uuid = self.request.query_params.get('viewer_uuid')
-        if viewer_uuid:
-            queryset = queryset.filter(viewer__uuid=viewer_uuid)
-
-        technical_uuid = self.request.query_params.get('technical_uuid')
-        if technical_uuid:
-            queryset = queryset.filter(technical__uuid=technical_uuid)
 
         return queryset
 
@@ -258,6 +286,7 @@ class CommentImageAPIView(generics.ListCreateAPIView):
             # Creating a comment
             request.data['uuid'] = str(request.data['image'])  # Convert the image to the appropriate data type
             return super().create(request, *args, **kwargs)
+        
 
 @api_view(['POST'])
 def create_comment_options(request,uuid):
@@ -292,7 +321,112 @@ def create_comment_options(request,uuid):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['GET'])
+def feedback_exact_floor_view(request, floor_uuid):
+    if request.method == 'GET':
+        # Add additional validation here
+        try:
+            feedback_floors = FeedbackFloor.objects.filter(floor__uuid=floor_uuid)
+            serializer = FeedbackFloorSerializer(feedback_floors, many=True)
+            return Response(serializer.data, status=201)
+        except FeedbackFloor.DoesNotExist:
+            return Response({'error': 'Floor not found'}, status=status.HTTP_404_NOT_FOUND)
+@api_view(['GET'])
+def client_dash_home_data(request, client_uuid):
+    if request.method == 'GET':
+        # Add additional validation here
+        try:
+            client = Client.objects.get(uuid=client_uuid)
+            project=Project.objects.get(client=client)
+            client_floors = Floor.objects.filter(project = project)
+            total_budget = 0
+            actions = 0
+            for floor in client_floors:
+                total_budget += floor.calculate_budget()
+                actions += floor.steps_count() 
+            total_amount_payments = Payment.objects.filter(client=project.client).aggregate(total_amount=Sum('amount'))
+            total_amount_payments = total_amount_payments['total_amount'] or 0
+            remaining_budget = project.ref_budget - total_amount_payments
+            context = {
+                "budget":total_budget,
+                "ref_budget":project.ref_budget,
+                "actions":actions,
+                "payments":total_amount_payments,
+                "needed":remaining_budget,
+            }
+            return Response(context, status=201)
+        except FeedbackFloor.DoesNotExist:
+            return Response({'error': 'Client not found'}, status=status.HTTP_404_NOT_FOUND)
+@api_view(['GET'])
+def get_project_image_by_uuid(request, client_uuid):
+    try:
+        project = get_object_or_404(Project,client__uuid=client_uuid)
+        project_image = ProjectImage2D.objects.filter(project=project)
+        serializer = ProjectImage2DSerializer(project_image, many= True)
+        return Response(serializer.data, status=200)
+        
+    except ProjectImage2D.DoesNotExist:
+        return Response({"message": "Project image not found"}, status=404)
 
+@api_view(['POST'])
+def create_project_image_by_uuid(request, client_uuid):
+    try:
+        client = Client.objects.get(uuid=client_uuid)
+    except Project.DoesNotExist:
+        return Response({"message": "client not found"}, status=404)
+    project = Project.objects.get(client=client)
+    data = request.data.copy()     # if i want to handle it later
+    # Perform any data manipulation or validation here
+    # For example, you can add additional fields or modify existing ones
+    data['project'] = project.id
+    serializer = ProjectImage2DSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(project=project)
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
+@api_view(['GET'])
+def get_project_image_with_comments(request, project_image_uuid,client_uuid):
+    try:
+        project_image = ProjectImage2D.objects.get(uuid=project_image_uuid)
+        serializer = ProjectImage2DSerializer(project_image)
+        comments = CommentImage2D.objects.filter(project_image=project_image).order_by('-created_at')
+        comment_serializer = CommentImage2DSerializer(comments,many=True)
+        response={
+            'image':serializer.data,
+            'comments':comment_serializer.data
+        }
+        return Response(response, status=200)
+    except ProjectImage2D.DoesNotExist:
+        return Response({"message": "Project image not found"}, status=404)
+
+@api_view(['POST'])
+def create_comment_project_image_2d(request, project_image_uuid,client_uuid):
+    try:
+        project_image = ProjectImage2D.objects.get(uuid=project_image_uuid)
+    except ProjectImage2D.DoesNotExist:
+        return Response({"message": "Project image not found"}, status=404)
+    data = request.data.copy() 
+    data['project_image'] = project_image.id
+    serializer = CommentImage2DSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save(project_image=project_image)
+        return Response(serializer.data, status=201)
+    
+    return Response(serializer.errors, status=400)
+
+@api_view(['GET', 'POST'])
+def feedback_floor_view(request):
+    if request.method == 'GET':
+        feedback_floors = FeedbackFloor.objects.all()
+        serializer = FeedbackFloorSerializer(feedback_floors, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        serializer = FeedbackFloorSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
 
 @api_view(['POST'])
 def create_comment(request):
@@ -536,32 +670,39 @@ def update_file(request):
 
     # Return a JSON response indicating failure
     return JsonResponse({'success': False})
+
+
+logger = logging.getLogger(__name__)
+
 def upload_file(request):
     if request.method == 'POST':
         project_uuid = request.POST.get('project_uuid')
-        file = request.FILES.get('file')
+        file_name = request.FILES.get('file_name')
+        file_name_str = request.POST.get('file_name_str')
 
         if not project_uuid:
             return JsonResponse({'success': False, 'message': 'Project UUID is required.'})
 
-        if not file:
+        if not file_name:
             return JsonResponse({'success': False, 'message': 'File is required.'})
 
-        
+        project_basic = get_object_or_404(ProjectBasic, uuid=project_uuid)
+        print("uploading >>>")
         try:
             project_file = ProjectFile.objects.create(
-                
-                project_id=ProjectBasic.objects.get(uuid=project_uuid).id,
-                name=file.name,
-                file=file,
+                project=project_basic.project,
+                name=file_name_str,
+                file=file_name,
             )
-            # project_file.save()
+            print(project_file)
+            project_file.save()
+            print("uploaded")
             return JsonResponse({'success': True, 'message': 'File uploaded successfully!'})
-        except ValidationError as e:
-            return JsonResponse({'success': False, 'message': str(e)})
+        except Exception as e:
+            logger.exception("An error occurred while creating the ProjectFile object. %s", e)
+            return JsonResponse({'success': False, 'message': 'An error occurred while uploading the file.'})
 
     return JsonResponse({'success': False, 'message': 'Invalid request method.'})
-
 class ProjectUploadAPIView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
@@ -734,6 +875,37 @@ class ProjectStudyAPIView(APIView):
             return Response(data)
         except ProjectStudy.DoesNotExist:
             return Response({'error': 'Project Study not found'}, status=404)
+from django.views import View
+
+class FeedbackAPIView(View):
+    def get(self, request):
+        client_uuid = request.GET.get('client_uuid')
+        project_uuid = request.GET.get('study_uuid')
+        
+        if not client_uuid or not project_uuid:
+            return JsonResponse({'error': 'client_uuid and study_uuid are required'}, status=400)
+        
+        feedback = Feedback.objects.filter(
+            project_study__project__client__uuid=client_uuid,
+            project_study__uuid=project_uuid
+        )
+        
+        feedback_list = [
+            {
+                'message': item.message,
+                'status': item.status,
+                'current_action': item.get_current_action(),
+                'is_seen': item.is_seen,
+                'created_at': item.created_at,
+                'uuid': item.uuid
+            }
+            for item in feedback
+        ]
+        
+        if not feedback_list:
+            return JsonResponse({'message': 'No feedback found'}, status=404)
+        
+        return JsonResponse({'feedback': feedback_list})
 class ReplyListCreateView(generics.ListCreateAPIView):
     queryset = Reply.objects.all()
     serializer_class = ReplySerializer

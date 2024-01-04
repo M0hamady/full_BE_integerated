@@ -2,12 +2,27 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 
 from client.models import Client
-from project.models import Project, ProjectBasic
+from project.models import Project, ProjectBasic, ProjectStudy
 
 from .models import User
 from django.contrib.auth.forms import AuthenticationForm
 
 
+class ProjectStudyForm(forms.ModelForm):
+    project = forms.ModelChoiceField(queryset=Project.objects.all(), widget=forms.HiddenInput())
+
+    class Meta:
+        model = ProjectStudy
+        fields = '__all__'
+        widgets = {
+            'total_price': forms.NumberInput(attrs={'required': False})
+        }
+
+    def __init__(self, *args, **kwargs):
+        current_project = kwargs.pop('current_project', None)
+        super().__init__(*args, **kwargs)
+        if current_project:
+            self.fields['project'].initial = current_project
 class RegisterForm(UserCreationForm):
     username = forms.CharField(widget=forms.TextInput(attrs={'class': 'my-class','autocomplete': 'off'}))
     password1 = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'my-class'}))

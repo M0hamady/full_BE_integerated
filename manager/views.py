@@ -1,3 +1,4 @@
+from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
 
 # Create your views here.
@@ -12,12 +13,12 @@ from django.urls import reverse_lazy
 from datetime import timedelta
 
 from client.models import Client
-from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, DesignStyle, DoorProvided, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ToiletType, WallDecorations
-from .forms import Profile_project_UpdateForm, ProfileUpdateForm, RegisterForm
+from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, DesignStyle, DoorProvided, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ProjectStudy, ToiletType, WallDecorations
+from .forms import Profile_project_UpdateForm, ProfileUpdateForm, ProjectStudyForm, RegisterForm
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import FormView, TemplateView
+from django.views.generic import FormView, TemplateView, UpdateView
 from django.shortcuts import redirect
 
 class Login(LoginView):
@@ -108,7 +109,46 @@ class ClientFilterView(TemplateView):
         context['query2'] = query2
         return context
   
+class UpdateProjectStudyView(UpdateView):
+    model = ProjectStudy
+    form_class = ProjectStudyForm
+    template_name = 'teamViewer/create_project_study.html'
+    success_url = '/project-study/create/'
+    def get_success_url(self):
+        client_uuid = self.object.project.client.uuid
+        return reverse('create_project_study_teamViewer', args=[client_uuid])
+class CreateProjectStudyView(TemplateView):
+    template_name = 'teamViewer/create_project_study.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        uuid = self.kwargs.get('uuid')  # Get the UUID from the URL parameters
+        print(uuid)
+        try:
+            project_study = ProjectStudy.objects.filter(project__client__uuid=uuid)
+            current_project = Project.objects.get(client__uuid=uuid)  # Retrieve the ProjectStudy instances for the specified project UUID
+            form = ProjectStudyForm(current_project=current_project)  # Create an empty form
+        except ProjectStudy.DoesNotExist:
+            form = ProjectStudyForm(initial={'uuid': uuid})  # Create a new form with the UUID initial value
+        
+        context['form'] = form
+        context['client'] = Client.objects.get(uuid=uuid)
+        context['uuid'] = uuid
+        context['project_study'] = project_study
+        context['current_project'] = current_project
+        return context
+
+    def post(self, request, *args, **kwargs):
+        current_project = self.get_context_data().get('current_project') # Retrieve the current project object
+        print(current_project.id)
+        form = ProjectStudyForm(request.POST, current_project=current_project)
+        print(form)
+        print(form.errors)
+        if form.is_valid():
+            form.save()
+            return redirect('create_project_study_teamViewer', self.get_context_data().get('uuid')  )  # Replace 'project_study_list' with the URL name for the project study list view
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
 def profile_update_view(request, client_uuid):
     client = get_object_or_404(Client, uuid=client_uuid)
     print("request.user.is_viewer()", request.user.is_viewer())

@@ -25,6 +25,7 @@ class Client(models.Model):
     ]
     add_by = models.ForeignKey('markting.Marketing', on_delete=models.SET_NULL,null=True,blank=True)
     name = models.CharField(max_length=150)
+    slack_channel = models.CharField(max_length=150,null=True)
     email = models.EmailField(null=True,blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     number = models.CharField(max_length=150, null=True, blank=True)
@@ -62,7 +63,9 @@ class Client(models.Model):
             return None
     def save(self, *args, **kwargs):
         current_datetime = datetime.now()
-        is_new_client = self.pk is None  # Check if it's a new client (not yet saved)
+        is_new_client = self.pk is None
+        if not self.slack_channel.startswith("#"):
+            self.slack_channel = f"#{self.slack_channel}"  # Check if it's a new client (not yet saved)
         super().save(*args, **kwargs)  # Save the client first
     def action_needed(self):
         
@@ -152,7 +155,9 @@ class Client(models.Model):
         print(total_conditions)
         return int((completed_conditions / total_conditions) * 100)
     def whatsapp_num(self):
-        return self.number[1:]
+        try:
+            return self.number[1:]
+        except: return None
     def generate_welcome_message(self):
         message = f"""Hello {self.name}!
 
@@ -187,8 +192,20 @@ Your access key is: {self.uuid}"""
         return (completed_conditions / total_conditions) * 100
     def percentage_needs(self):
         return 100 -self.calculate_data_completion_percentage2()
+    
+    @property
+    def total_payments(self):
+        return Payment.objects.filter(client=self).aggregate(models.Sum('amount'))['amount__sum'] or 0
 
+    def get_all_payments(self, filter_by=None):
+        payments = self.payment_set.filter(client=self)
+        if filter_by:
+            payments = payments.filter(payment_method=filter_by)
+        return payments
 
+    @property
+    def is_under_expenditure_limit(self):
+        return self.total_payments < self.maximum_expenditure
 class Contact(models.Model):
     name = models.CharField(max_length=255)
     email = models.EmailField()
@@ -197,5 +214,23 @@ class Contact(models.Model):
 
     def __str__(self):
         return self.name
+    
+
+class Payment(models.Model):
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('credit_card', 'Credit Card'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('paypal', 'PayPal'),
+    ]
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateField(auto_now=True,)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    paid_for = models.CharField(max_length=200)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    def __str__(self):
+        return f"Payment of {self.amount} for client {self.client.name}"    
     
     

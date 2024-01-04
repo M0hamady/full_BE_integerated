@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ClientFilterView, Login, Meeting, Profile, add_ceiling_decorations, add_flooring_material, add_furniture_details, add_light_type, add_style, add_wall_decorations, delete_ceiling_decorations,delete_design, delete_color,Projects,add_color, RegisterView, ProfileProjectUpdateView, delete_flooring_material, delete_furniture_details, delete_light_type, delete_wall_decorations, design_styles, profile_update_view
+from .views import ClientFilterView, CreateProjectStudyView, Login, Meeting, Profile, UpdateProjectStudyView, add_ceiling_decorations, add_flooring_material, add_furniture_details, add_light_type, add_style, add_wall_decorations, delete_ceiling_decorations,delete_design, delete_color,Projects,add_color, RegisterView, ProfileProjectUpdateView, delete_flooring_material, delete_furniture_details, delete_light_type, delete_wall_decorations, design_styles, profile_update_view
 from django.contrib.auth.views import LogoutView
 
 urlpatterns = [
@@ -11,6 +11,8 @@ urlpatterns = [
     path('accounts/login/', Login.as_view(), name='login'),
     path("employee/register/", RegisterView.as_view(), name="register"),
     path('client/<uuid:client_uuid>/update/', profile_update_view, name='client_update'),
+    path('project-study/<int:pk>/update/', UpdateProjectStudyView.as_view(), name='update_project_study_teamViewer'),
+    path('project-study/create/<uuid:uuid>/', CreateProjectStudyView.as_view(), name='create_project_study_teamViewer'),
     path('client/project/<uuid:client_uuid>/update/', ProfileProjectUpdateView.as_view(), name='client_project_update'),
     path('client/colors/<uuid:project_uuid>/update/', add_color, name='add_color'),
     path('client/colors/delete/<uuid:project_uuid>/update/<int:color_uuid>', delete_color, name='delete_color'),

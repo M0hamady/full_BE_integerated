@@ -23,6 +23,7 @@ class Project(models.Model):
     is_client_approved_2d = models.BooleanField(default=False) 
     is_client_approved_3d = models.BooleanField(default=False) 
     is_finished = models.BooleanField(default=False)
+    ref_budget = models.DecimalField(max_digits=10, decimal_places=2)
     
 
     def __str__(self):
@@ -34,6 +35,7 @@ class Project(models.Model):
         for floor in floors:
             floor_data = {
                 'floor_name': floor.name,
+                'floor_uuid': floor.uuid,
                 'site_eng': floor.site_eng.name if floor.site_eng else None,
                 'steps_count': floor.steps_count(),
                 'moshtrayat_budget': floor.calculate_budget(),
@@ -393,6 +395,64 @@ class ProjectFile(models.Model):
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
 
+class ProjectFile3D(models.Model):
+    project = models.ForeignKey(Project, verbose_name="project_file", on_delete=models.SET_NULL,null=True,blank=True)
+    name = models.CharField( max_length=50)
+    file = models.FileField(upload_to='uploads/Files/')
+    uuid = models.UUIDField( editable=False, unique=True)
+    can_client_sea=models.BooleanField(default=False)
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
+
+class ProjectImage2D(models.Model):
+    project = models.ForeignKey(Project, verbose_name="project_file", on_delete=models.SET_NULL,null=True,blank=True)
+    name = models.CharField( max_length=50)
+    image = models.ImageField(upload_to='uploads/images/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'gif'])])
+    uuid = models.UUIDField( editable=False, unique=True)
+    can_client_sea=models.BooleanField(default=False)   
+    created_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
+
+
+class CommentImage2D(models.Model):
+    project_image = models.ForeignKey(ProjectImage2D, on_delete=models.CASCADE, related_name='comments')
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    uuid = models.UUIDField( editable=False, unique=True)
+    
+    def __str__(self):
+        return self.text
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
+
+
+class ReplyCommentImage2D(models.Model):
+    comment = models.ForeignKey(CommentImage2D, on_delete=models.CASCADE, related_name='replies')
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    uuid = models.UUIDField( editable=False, unique=True)
+    
+    def __str__(self):
+        return self.text
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
+
+
 class ProjectImage(models.Model):
     project = models.ForeignKey(Project, verbose_name="project_file", on_delete=models.SET_NULL,null=True,blank=True)
     name = models.CharField( max_length=50)
@@ -445,17 +505,28 @@ class Comment_image(models.Model):
         super().save(*args, **kwargs)
     @property
     def owner(self):
-        if self.client:
-            return self.client
         if self.designer:
-            return self.client
-        if self.viewer:
-            return self.client
-        if self.technical:
+            return self.designer
+        elif self.viewer:
+            return self.viewer
+        elif self.technical:
+            return self.technical
+        elif self.client:
             return self.client
 
     def is_reply(self):
         return self.parent is not None
+    
+    def parent_uuid(self):
+        if self.parent:
+            return self.parent.uuid
+        else:return None
+    @property
+    def is_reply_1(self):
+        res = False
+        if self.parent is not None:
+            res = True
+        return res
     
 class ProjectDetails(models.Model):# not used yet
     colors=models.CharField( max_length=9)
@@ -686,7 +757,7 @@ class FeedbackFloor(models.Model):
     ]
     is_accepted = models.BooleanField(default=True)
     is_seen = models.BooleanField(default=False)
-    is_seen = models.BooleanField(default=False)
+    
     
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="process")
     uuid = models.UUIDField( editable=False, )
@@ -713,7 +784,8 @@ class Feedback(models.Model):
     ]
     is_accepted = models.BooleanField(default=True)
     is_seen = models.BooleanField(default=False)
-    is_seen = models.BooleanField(default=False)
+    is_process = models.BooleanField(default=False)
+    is_finished = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="process")
     uuid = models.UUIDField( editable=False, )
@@ -725,6 +797,17 @@ class Feedback(models.Model):
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
+    def get_current_action(self):
+        if self.is_accepted and not self.is_seen:
+            return 'Pending (Not Seen)'
+        elif self.is_process  and not self.is_finished:
+            return 'In Process'
+        elif self.is_finished :
+            return 'Finished'
+        elif self.is_accepted and self.is_seen and not (self.is_process or self.is_finished):
+            return 'In Negotiation'
+        else:
+            return 'Unknown'
 class ReplyFloor(models.Model):
     feedback_floor = models.ForeignKey(FeedbackFloor, on_delete=models.CASCADE)
     site_Eng = models.ForeignKey(SiteEng, on_delete=models.SET_NULL, null=True, blank=True)
@@ -776,7 +859,7 @@ class Step(models.Model):
     status = models.CharField(max_length=250, choices=CHOICE_TYPES)
     uuid = models.UUIDField( editable=False, unique=True)
     def __str__(self) :
-        return self.name
+        return self.name + '_' + self.floor.name + '_' +self.floor.project.client.name
     def save(self, *args, **kwargs):
         if not self.uuid:
             self.uuid = uuid.uuid4()

@@ -42,11 +42,18 @@ def model_links(request):
     return links
 @register.simple_tag
 def project_files(uuid):
-    # print(uuid)
-    # print(ProjectFile.objects.filter(project=ProjectBasic.objects.get(uuid=uuid).id))
-    all_files = ProjectFile.objects.filter(project=ProjectBasic.objects.get(uuid=uuid).id)
-    print(all_files)
-    return all_files
+    # Get the ProjectBasic object with the given UUID
+    project_basic = ProjectBasic.objects.get(uuid=uuid)
+
+    # Get the project ID of the ProjectBasic object
+    project_uuid = project_basic.project.uuid
+
+    # Filter ProjectFile objects based on the project ID
+    project_files = ProjectFile.objects.filter(project__uuid=project_uuid)
+
+    # Filter ProjectFile objects based on the UUID
+
+    return project_files
 
 @register.simple_tag
 def get_extensions(name):
