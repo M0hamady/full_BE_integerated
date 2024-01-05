@@ -29,7 +29,7 @@ class Login(LoginView):
         login(self.request, user)
         print(user.is_manager(),user.is_viewer())
         print(user.is_viewer(), "is viewer")
-        if user.is_manager():
+        if user.is_manager() or user.is_superuser:
             return redirect('meeting')
         elif user.is_viewer():
             return redirect('viewer_dash')

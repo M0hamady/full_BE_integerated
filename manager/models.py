@@ -2,6 +2,7 @@ import uuid
 from django.conf import settings 
 from django.db import models
 from django.contrib.auth.models import AbstractUser, Group, User, Permission
+from project.models import SiteEng, SitesManager
 
 from teamview.models import Viewer
 
@@ -54,4 +55,20 @@ class User(AbstractUser):
         except Viewer.DoesNotExist:
             return False
         if viewer:
+            return True
+    def is_branchManager(self):
+        try:
+            viewer = SitesManager.objects.get(user=self)
+            # return True
+        except SitesManager.DoesNotExist:
+            return False
+        if viewer.is_manager and viewer.is_active and viewer.branch:
+            return True
+    def is_branchEng(self):
+        try:
+            viewer = SiteEng.objects.get(user=self)
+            # return True
+        except SiteEng.DoesNotExist:
+            return False
+        if viewer.is_active and viewer.branch:
             return True

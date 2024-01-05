@@ -4,12 +4,14 @@ from django.core.validators import FileExtensionValidator
 import uuid 
 from multiselectfield import MultiSelectField
 from project.forms import ColorChoicesFormField
+from supportconstruction import settings
 
 
 class Project(models.Model):
     name = models.CharField(max_length=100)
     uuid = models.UUIDField( editable=False, unique=True,verbose_name="secret_key")
     client = models.ForeignKey("client.Client", verbose_name="project_owner", on_delete=models.SET_NULL,null=True,blank=True)
+    branch = models.ForeignKey("branches.Branch", verbose_name="project_Branch", on_delete=models.SET_NULL,null=True,blank=True)
     assign_to_2d_designer = models.ForeignKey("designer.Designer", verbose_name="assigned_2d_designer", on_delete=models.SET_NULL,null=True,blank=True,related_name='assigned_2d_designer')
     assign_to_3d_designer = models.ForeignKey("designer.Designer", verbose_name="assigned_3d_designer", on_delete=models.SET_NULL,null=True,blank=True,related_name='assigned_3d_designer')
     viewer = models.ForeignKey("teamview.Viewer", verbose_name="project_viewer_from_team_viewer", on_delete=models.SET_NULL,null=True,blank=True,related_name='team_viewer')
@@ -539,53 +541,30 @@ class ProjectDetails(models.Model):# not used yet
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
-class SiteEng(models.Model):
-    name = models.CharField(max_length=50)
-    uuid = models.UUIDField( editable=False, unique=True)
-
-    def get_floors_data(self):
-        floors_data = []
-        floors = self.floorEng.all()
-        
-        for floor in floors:
-            floor_data = {
-                'floor_name': floor.name,
-                'site_manager': floor.site_manager.name if floor.site_manager else None,
-                'moshtrayat_count': floor.steps.count(),
-                'moshtrayat_budget': floor.calculate_budget(),
-                'moshtrayat_duration': floor.calculate_duration(),
-            }
-            floors_data.append(floor_data)
-        
-        return floors_data
-    def save(self, *args, **kwargs):
-        if not self.uuid:
-            self.uuid = uuid.uuid4()
-        super().save(*args, **kwargs)
 class SitesManager(models.Model):
-    name = models.CharField(max_length=50)
-    uuid = models.UUIDField( editable=False, unique=True)
-    def __str__(self) :
-        return self.name
-    def get_floors_data(self):
-        floors_data = []
-        floors = self.floorEng.all()
-        
-        for floor in floors:
-            floor_data = {
-                'floor_name': floor.name,
-                'site_eng': floor.site_eng.name if floor.site_eng else None,
-                'moshtrayat_count': floor.steps.count(),
-                'moshtrayat_budget': floor.calculate_budget(),
-                'moshtrayat_duration': floor.calculate_duration(),
-            }
-            floors_data.append(floor_data)
-        
-        return floors_data
+    name = models.CharField(max_length=100)
+    uuid = models.UUIDField(editable=False, unique=True)
+    branch = models.ForeignKey("branches.Branch", on_delete=models.SET_NULL,null=True,blank=True)
+    is_manager = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,blank=True)
+
     def save(self, *args, **kwargs):
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
+
+class SiteEng(models.Model):
+    name = models.CharField(max_length=100)
+    uuid = models.UUIDField(editable=False, unique=True)
+    branch = models.ForeignKey("branches.Branch", on_delete=models.SET_NULL,null=True,blank=True)
+    is_active = models.BooleanField(default=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,blank=True)
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
+
 class Moshtrayat(models.Model):
     name = models.CharField(max_length=50)
     step_moshtrayat = models.ForeignKey('Step', on_delete=models.CASCADE, related_name='stepMoshtrayats')

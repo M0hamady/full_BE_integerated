@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     # 'storages',
     'manager',
     'widget_tweaks',
+    'branches',
 ]
 
 MIDDLEWARE = [
