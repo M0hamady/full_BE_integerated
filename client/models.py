@@ -161,7 +161,7 @@ class Client(models.Model):
     def generate_welcome_message(self):
         message = f"""Hello {self.name}!
 
-Welcome to Support Construction Company.
+Welcome to https://support-constructions.com. 
 
 to get your access visit our provider: https://www.backend.support-constructions.com/website/ClientUuid/{self.uuid}"""
         return message

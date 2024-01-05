@@ -889,7 +889,6 @@ class FeedbackAPIView(View):
             project_study__project__client__uuid=client_uuid,
             project_study__uuid=project_uuid
         )
-        
         feedback_list = [
             {
                 'message': item.message,
@@ -897,7 +896,8 @@ class FeedbackAPIView(View):
                 'current_action': item.get_current_action(),
                 'is_seen': item.is_seen,
                 'created_at': item.created_at,
-                'uuid': item.uuid
+                'uuid': item.uuid,
+                'replies':[{"reply":itemN,'owner':"SC"} for itemN in item.replies.all().values('message')]
             }
             for item in feedback
         ]
