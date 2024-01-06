@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 from django.db import models
 from django.core.validators import FileExtensionValidator
 import uuid 
@@ -6,7 +7,11 @@ from multiselectfield import MultiSelectField
 from project.forms import ColorChoicesFormField
 from supportconstruction import settings
 
-
+from django.db.models.signals import pre_delete
+from PIL import Image
+from io import BytesIO
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.dispatch import receiver
 class Project(models.Model):
     name = models.CharField(max_length=100)
     uuid = models.UUIDField( editable=False, unique=True,verbose_name="secret_key")
@@ -425,8 +430,49 @@ class ProjectImage2D(models.Model):
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
+    def resize_image(self):
+        # Retrieve the uploaded image
+        img = Image.open(self.image)
 
+        # Set the maximum size to 6 megabytes (6 * 1024 * 1024 bytes)
+        max_size = 1 * 1024 * 1024
 
+        # Check if the image size exceeds the maximum size
+        if self.image.size > max_size:
+            # Calculate the new image dimensions to maintain the aspect ratio
+            width, height = img.size
+            aspect_ratio = width / height
+            new_width = int((max_size * aspect_ratio) ** 0.5)
+            new_height = int(max_size / ((max_size * aspect_ratio) ** 0.5))
+
+            # Resize the image
+            img = img.resize((new_width, new_height), Image.ANTIALIAS)
+
+            # Create a BytesIO object to temporarily hold the resized image data
+            temp_buffer = BytesIO()
+            img.save(temp_buffer, format='JPEG')
+
+            # Create a new InMemoryUploadedFile with the resized image data
+            self.image = InMemoryUploadedFile(
+                temp_buffer,
+                None,
+                f"{self.image.name.split('.')[0]}.jpg",
+                'image/jpeg',
+                temp_buffer.tell(),
+                None
+            )
+@receiver(pre_delete, sender=ProjectImage2D)
+def delete_image_file(sender, instance, **kwargs):
+    # Get the path to the image file
+    try:
+        image_path = instance.image.url
+    except:
+        try: image_path = instance.image
+        except: image_path = instance.image.path
+    # Check if the image file exists
+    if os.path.exists(image_path):
+        # Delete the image file
+        os.remove(image_path)
 class CommentImage2D(models.Model):
     project_image = models.ForeignKey(ProjectImage2D, on_delete=models.CASCADE, related_name='comments')
     text = models.TextField()
@@ -554,6 +600,10 @@ class SitesManager(models.Model):
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        branch = 'under training' if not self.branch else self.branch
+        return f"{self.name}_{branch}"
+
 class SiteEng(models.Model):
     name = models.CharField(max_length=100)
     uuid = models.UUIDField(editable=False, unique=True)
@@ -564,6 +614,10 @@ class SiteEng(models.Model):
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
+    def __str__(self):
+        branch = 'under training' if not self.branch else self.branch
+        return f"{self.name}_{branch}"
+
 
 class Moshtrayat(models.Model):
     name = models.CharField(max_length=50)
@@ -722,8 +776,20 @@ class ProjectStudy(models.Model):
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
-
-
+    def get_feeds_with_replies(self):
+        feeds = Feedback.objects.filter(project_study= self)
+        result = []
+        for feed in feeds:
+            result.append({
+                'feed':feed.message,
+                'id':feed.id,
+                'created_at':feed.created_at,
+                'replies':feed.replies.all().values('id','message','uuid','created_at'),
+                'uuid':feed.uuid,
+                'uuid_target':'#'+f'{feed.uuid}',
+            })
+        return result
+            
 class FeedbackFloor(models.Model):
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE)
     message = models.CharField(max_length=1000)

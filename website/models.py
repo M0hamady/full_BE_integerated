@@ -62,7 +62,7 @@ class Pic(models.Model):
         img = Image.open(self.image)
 
         # Set the maximum size to 6 megabytes (6 * 1024 * 1024 bytes)
-        max_size = 2 * 1024 * 1024
+        max_size = 1 * 1024 * 1024
 
         # Check if the image size exceeds the maximum size
         if self.image.size > max_size:

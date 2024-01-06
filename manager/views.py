@@ -13,7 +13,8 @@ from django.urls import reverse_lazy
 from datetime import timedelta
 
 from client.models import Client
-from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, DesignStyle, DoorProvided, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ProjectStudy, ToiletType, WallDecorations
+from .forms import ProjectImage2DForm, ReplyCommentImage2DForm, ReplyForFeeds
+from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, CommentImage2D, DesignStyle, DoorProvided, Feedback, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ProjectImage2D, ProjectStudy, ReplyCommentImage2D, ToiletType, WallDecorations
 from .forms import Profile_project_UpdateForm, ProfileUpdateForm, ProjectStudyForm, RegisterForm
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView
@@ -48,6 +49,7 @@ class Profile(LoginRequiredMixin, TemplateView):
 
 class Projects(LoginRequiredMixin, TemplateView):
     template_name = 'registration/pages/projects.html'
+
 
 class Meeting(LoginRequiredMixin, TemplateView):
     template_name = 'registration/pages/meetings.html'
@@ -112,13 +114,52 @@ class ClientFilterView(TemplateView):
 class UpdateProjectStudyView(UpdateView):
     model = ProjectStudy
     form_class = ProjectStudyForm
-    template_name = 'teamViewer/create_project_study.html'
+    template_name = 'branches/projects/create_project_study.html'
     success_url = '/project-study/create/'
     def get_success_url(self):
         client_uuid = self.object.project.client.uuid
         return reverse('create_project_study_teamViewer', args=[client_uuid])
+class Monitoring2DAnd3DImagesForProject(TemplateView):
+    template_name = 'branches/projects/monitor_2d_3d_images.html'
+
+    def get(self, request, *args, **kwargs):
+        project_uuid = kwargs['project_uuid']
+        self.client = Client.objects.get(uuid =project_uuid)
+        self.project = get_object_or_404(Project, client=self.client.id)
+        images = ProjectImage2D.objects.filter(project=self.project)
+        image_comments = []
+        for image in images:
+            comments = CommentImage2D.objects.filter(project_image=image)
+            comment_replies = []
+            for comment in comments:
+                replies = ReplyCommentImage2D.objects.filter(comment=comment)
+                comment_replies.append(replies)
+            image_comments.append((image, comments, comment_replies))
+        reply_form = ReplyCommentImage2DForm()
+        print(reply_form.as_ul)
+        return self.render_to_response({'images': image_comments, 'client': self.client.uuid ,'reply_form': reply_form})
+
+    def post(self, request, *args, **kwargs):
+        form = ProjectImage2DForm(request.POST, request.FILES)
+        project_uuid = kwargs['project_uuid']
+        reply_form = ReplyCommentImage2DForm(request.POST)
+        self.client = Client.objects.get(uuid =project_uuid)
+        if form.is_valid():
+            image = form.save(commit=False)
+            image.project =  get_object_or_404(Project, client  = self.client.id)
+            image.save()
+            return redirect('monitor_images',self.client.uuid  )
+        elif reply_form.is_valid():
+            reply = reply_form.save(commit=False)
+            reply.comment = CommentImage2D.objects.get(uuid=request.POST['comment_uuid'])
+            reply.save()
+            return redirect('monitor_images',self.client.uuid  )
+        else:
+            return self.render_to_response({'form': form})
+        
+
 class CreateProjectStudyView(TemplateView):
-    template_name = 'teamViewer/create_project_study.html'
+    template_name = 'branches/projects/create_project_study.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -136,17 +177,29 @@ class CreateProjectStudyView(TemplateView):
         context['uuid'] = uuid
         context['project_study'] = project_study
         context['current_project'] = current_project
+        
+        # Set initial value for form_reply
+        feed_id = self.request.POST.get('feed_id')  # Get the feed_id from the request
+        initial_reply = {'feedback': feed_id} if feed_id else {}  # Set initial value if feed_id is provided
+        context['form_reply'] = ReplyForFeeds(initial=initial_reply)
+
         return context
 
     def post(self, request, *args, **kwargs):
-        current_project = self.get_context_data().get('current_project') # Retrieve the current project object
-        print(current_project.id)
+        current_project = self.get_context_data().get('current_project')  # Retrieve the current project object
         form = ProjectStudyForm(request.POST, current_project=current_project)
-        print(form)
-        print(form.errors)
+        form_reply = ReplyForFeeds(request.POST)
+        print(form_reply.is_valid(),form_reply.errors)
         if form.is_valid():
             form.save()
-            return redirect('create_project_study_teamViewer', self.get_context_data().get('uuid')  )  # Replace 'project_study_list' with the URL name for the project study list view
+            return redirect('create_project_study_teamViewer', self.get_context_data().get('uuid'))
+        elif form_reply.is_valid():
+            reply = form_reply.save(commit=False)
+            reply.save()
+            feedback = Feedback.objects.get(id=reply.feedback.id)
+            feedback.replies.add(reply.id)
+            feedback.save()
+            return self.render_to_response(self.get_context_data(form=form))
         else:
             return self.render_to_response(self.get_context_data(form=form))
 def profile_update_view(request, client_uuid):

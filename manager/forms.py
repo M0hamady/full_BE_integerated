@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 
 from client.models import Client
-from project.models import Project, ProjectBasic, ProjectStudy
+from project.models import Project, ProjectBasic, ProjectImage2D, ProjectStudy, Reply, ReplyCommentImage2D
 
 from .models import User
 from django.contrib.auth.forms import AuthenticationForm
@@ -151,3 +151,25 @@ class Profile_project_UpdateForm(forms.ModelForm):
                 self.fields[field].required = False
                 self.fields[field].null = False
             fields.update(field_widgets)
+
+
+class ProjectImage2DForm(forms.ModelForm):
+    class Meta:
+        model = ProjectImage2D
+        fields = ('name', 'image', 'can_client_sea')
+class ReplyCommentImage2DForm(forms.ModelForm):
+    class Meta:
+        model = ReplyCommentImage2D
+        fields = ('text',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['text'].widget.attrs.update({'class': 'form-control', 'rows': 3, 'placeholder': 'Reply'})
+
+class ReplyForFeeds(forms.ModelForm):
+    class Meta:
+        model = Reply  # Specify the model class associated with the form
+        fields = '__all__'
+
+    # Rest of your code...
+

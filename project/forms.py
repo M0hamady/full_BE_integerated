@@ -1,6 +1,8 @@
 from django import forms
 from multiselectfield import MultiSelectFormField
 
+# from .models import ProjectImage2D
+
 
 class ColorChoicesWidget(forms.CheckboxSelectMultiple):
     template_name = 'admin/color_choices_widget.html'
@@ -22,3 +24,5 @@ class ColorChoicesFormField(MultiSelectFormField):
         if not value:
             return []
         return super().clean(value)
+    
+

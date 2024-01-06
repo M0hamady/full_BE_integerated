@@ -12,8 +12,8 @@ class ProjectBasicAdmin(admin.ModelAdmin):
     search_fields = ('uuid',)
 class ProjectAdmin(admin.ModelAdmin):
     inlines = (ProjectBasicInline,)
-    list_display = ( 'uuid','client', 'ref_budget')
-    list_filter = ('assign_to_2d_designer','assign_to_3d_designer','viewer','technical_user')
+    list_display = ( 'uuid','client', 'ref_budget','branch')
+    list_filter = ('assign_to_2d_designer','assign_to_3d_designer','viewer','technical_user','branch' )
     search_fields = ('uuid',)
 # Register your models here.
 admin.site.register(Project,ProjectAdmin)

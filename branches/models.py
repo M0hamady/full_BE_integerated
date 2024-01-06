@@ -10,5 +10,8 @@ class Branch(models.Model):
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        return self.name
+
 
 # branch manger
