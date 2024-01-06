@@ -64,8 +64,8 @@ class Client(models.Model):
     def save(self, *args, **kwargs):
         current_datetime = datetime.now()
         is_new_client = self.pk is None
-        if not self.slack_channel.startswith("#"):
-            self.slack_channel = f"#{self.slack_channel}"  # Check if it's a new client (not yet saved)
+        if self.slack_channel is not None and not self.slack_channel.startswith("#"):
+            self.slack_channel = f"#{self.slack_channel}"  # Check if it's a new client (not yet saved)  # Check if it's a new client (not yet saved)
         super().save(*args, **kwargs)  # Save the client first
     def action_needed(self):
         

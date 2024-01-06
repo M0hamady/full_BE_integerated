@@ -30,7 +30,7 @@ class Project(models.Model):
     is_client_approved_2d = models.BooleanField(default=False) 
     is_client_approved_3d = models.BooleanField(default=False) 
     is_finished = models.BooleanField(default=False)
-    ref_budget = models.DecimalField(max_digits=10, decimal_places=2)
+    ref_budget = models.DecimalField(max_digits=10, decimal_places=2,default=0)
     
 
     def __str__(self):
