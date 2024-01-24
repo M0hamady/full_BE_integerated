@@ -100,7 +100,7 @@ class ProfileSiteEngTasksToday(LoginRequiredMixin, TemplateView):
         list_steps = []
         for floor in floors:
             steps = floor.step_set.filter(
-                Q(start_date__lte=today) & Q(end_date__gte=today)
+                (Q(start_date__lte=today) | Q(end_date__lte=today) ) 
             )
             list_steps.extend(steps)
         
