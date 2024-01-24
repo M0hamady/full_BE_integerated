@@ -16,6 +16,7 @@ from .models import Client, Contact
 from .serializers import ClientAPI, ClientRegistrationSerializer, ClientSerializer, ClientUpdateSerializer, ClientWebSerializer, ContactSerializer
 from rest_framework.views import APIView
 
+import urllib.parse
 
 from rest_framework.decorators import api_view
 
@@ -122,12 +123,12 @@ def client_create_view(request,viewer_uuid):
     name_message = f"""*تمت إضافة عميل جديد*
         • الاسم: {client_serializer.data['name']}
         • التاريخ والوقت: {current_time}
-        • يمكنك الاتصال على الرقم: {client_serializer.data['number']}
+        • يمكنك الاتصال على الرقم: <tel:{client_serializer.data['number']}|{client_serializer.data['number']}>
         • ومتابعه  إرسال البريد الإلكتروني عبر : {client_serializer.data['email']}
-        • ومتابعه  بينات العميل : https://www.backend.support-constructions.com/client/{client_serializer.data['uuid']}/update/
-        • ومتابعة اجراءت العقد من خلال  : https://www.backend.support-constructions.com//project/{client_serializer.data['uuid']}/update
-
+        • ومتابعه  بيانات العميل : https://www.backend.support-constructions.com/client/project/{client_serializer.data['uuid']}/update/
 """
+    encoded_message = urllib.parse.quote_plus(name_message)
+    slack_message = f"<!here> {encoded_message}"
     send_slack_notification(channel, name_message)
     return Response(context, status=status.HTTP_201_CREATED)
 # class ClientCreateView(generics.CreateAPIView):
@@ -436,41 +437,25 @@ def handle_client_data(client_data):
     if client_data.get('name'):
         # Perform action for name
         name = client_data['name']
-        name_message = f"""*تمت إضافة عميل جديد*
+        name_message += f"""*تمت إضافة عميل جديد*
         • الاسم: {name}
         • التاريخ والوقت: {current_time}"""
 
     if client_data.get('number'):
         # Perform action for phone number
         number = client_data['number']
-        name_message = f"""*تمت إضافة عميل جديد*
-        • الاسم: {name}
-        • التاريخ والوقت: {current_time}
-        • يمكنك الاتصال على الرقم: {number}"""
+        name_message += f"""
+        • يمكنك الاتصال على الرقم: <tel:{number}|{number}>"""
 
     if client_data.get('email'):
         # Perform action for email
         email = client_data['email']
-        name_message = f"""*تمت إضافة عميل جديد*
-        • الاسم: {name}
-        • التاريخ والوقت: {current_time}
-        • يمكنك الاتصال على الرقم: {number}
+        name_message += f"""
         • ومتابعه  إرسال البريد الإلكتروني عبر : {email}
-        • ومتابعه  بينات العميل : https://www.backend.support-constructions.com/client/{uuid}/update/
-        • ومتابعة اجراءت العقد من خلال  : https://www.backend.support-constructions.com/client/project/{uuid}/update
-
-"""
+        • ومتابعة اجراءت العقد من خلال  : https://www.backend.support-constructions.com/client/project/{uuid}/update"""
 
     send_slack_notification(channel, name_message)
-    channel_name = '#' +name
 
-    # create_channel_and_get_invite_link(channel_name)
-    
-
-    # Return the client_data for reusability
-    return client_data
-
-    
     # Return the client_data for reusability
     return client_data
 class ClientRegistrationView(APIView):
@@ -562,6 +547,7 @@ def client_data(request, client_uuid):
         project = Project.objects.get(client  = client)
     except:return Response({'error': 'client has no project yet'}, status=status.HTTP_400_BAD_REQUEST)
     client_project = ProjectSerializer_client(project).data  
+    
 
     try: 
         project_basic = ProjectBasic.objects.get(project  = project)

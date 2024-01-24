@@ -1,6 +1,10 @@
+import json
+from django.http import JsonResponse
 from django.urls import reverse
 from django.shortcuts import render, get_object_or_404
-
+from requests import Response
+from client.serializers import ClientSerializer
+from fuzzywuzzy import fuzz
 # Create your views here.
 # all projects control 
 # each project >>>>
@@ -10,11 +14,12 @@ from django.shortcuts import render, get_object_or_404
 # 
 from django.utils import timezone
 from django.urls import reverse_lazy
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from client.models import Client
+from project.serializers import ProjectStudySerializer
 from .forms import ProjectImage2DForm, ReplyCommentImage2DForm, ReplyForFeeds
-from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, CommentImage2D, DesignStyle, DoorProvided, Feedback, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ProjectImage2D, ProjectStudy, ReplyCommentImage2D, ToiletType, WallDecorations
+from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, CommentImage2D, DesignStyle, DoorProvided, Feedback, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ProjectImage2D, ProjectStudy, ReplyCommentImage2D, SitesManager, ToiletType, WallDecorations
 from .forms import Profile_project_UpdateForm, ProfileUpdateForm, ProjectStudyForm, RegisterForm
 from django.contrib.auth import login
 from django.contrib.auth.views import LoginView
@@ -28,12 +33,17 @@ class Login(LoginView):
         # Log in the user
         user = form.get_user()
         login(self.request, user)
-        print(user.is_manager(),user.is_viewer())
         print(user.is_viewer(), "is viewer")
         if user.is_manager() or user.is_superuser:
             return redirect('meeting')
         elif user.is_viewer():
             return redirect('viewer_dash')
+        elif user.is_designer():
+            return redirect('viewer_dash')
+        elif user.is_branchEng():
+            return redirect('site_eng')
+        elif user.is_branchManager():
+            return redirect('site_manager')
         # return redirect('meeting')
         
        
@@ -99,6 +109,13 @@ class ClientFilterView(TemplateView):
                 clients_neural = Client.objects.all()
                 clients= [client for client in clients_neural if "manager"   in client.action_needed().split()  ]
                 clients = [clients_d for clients_d in clients if ProjectBasic.objects.get(project__client =clients_d).project_basic_percentage() >60 ]
+        elif query1 == 'manager':
+            user = self.request.user
+            branch = SitesManager.objects.get(user=user).branch
+            projects = Project.objects.filter(branch=branch)
+            project_ids = [project.client.id for project in projects]
+            clients=Client.objects.filter(id__in=project_ids) 
+
 
 
 
@@ -166,17 +183,53 @@ class CreateProjectStudyView(TemplateView):
         uuid = self.kwargs.get('uuid')  # Get the UUID from the URL parameters
         print(uuid)
         try:
-            project_study = ProjectStudy.objects.filter(project__client__uuid=uuid)
-            current_project = Project.objects.get(client__uuid=uuid)  # Retrieve the ProjectStudy instances for the specified project UUID
+            current_project = Project.objects.get(client__uuid=uuid)  # Retrieve the current project
+            project_studies = ProjectStudy.objects.filter(project=current_project)  # Retrieve current project studies
             form = ProjectStudyForm(current_project=current_project)  # Create an empty form
-        except ProjectStudy.DoesNotExist:
+            existing_project_names = [project.title for project in ProjectStudy.objects.all()]
+            suggestions = []
+
+            for name in existing_project_names:
+                is_similar = False
+
+                for suggestion in suggestions:
+                    similarity_ratio = fuzz.ratio(name, suggestion)
+
+                    if similarity_ratio >= 65:
+                        is_similar = True
+                        break
+
+                if not is_similar:
+                    suggestions.append(name)
+
+            suggestions = ProjectStudy.objects.filter(title__in=suggestions)# Retrieve all studies as suggestions
+        except Project.DoesNotExist:
             form = ProjectStudyForm(initial={'uuid': uuid})  # Create a new form with the UUID initial value
+            project_studies = []
+            existing_project_names = [project.title for project in ProjectStudy.objects.all()]
+            suggestions = []
+
+            for name in existing_project_names:
+                is_similar = False
+
+                for suggestion in suggestions:
+                    similarity_ratio = fuzz.ratio(name, suggestion)
+
+                    if similarity_ratio >= 65:
+                        is_similar = True
+                        break
+
+                if not is_similar:
+                    suggestions.append(name)
+
+            suggestions = ProjectStudy.objects.filter(title__in=suggestions)# Retrieve all studies as suggestions
         
         context['form'] = form
         context['client'] = Client.objects.get(uuid=uuid)
         context['uuid'] = uuid
-        context['project_study'] = project_study
+        context['project_study'] = project_studies
         context['current_project'] = current_project
+        context['suggestions'] = suggestions
         
         # Set initial value for form_reply
         feed_id = self.request.POST.get('feed_id')  # Get the feed_id from the request
@@ -200,24 +253,82 @@ class CreateProjectStudyView(TemplateView):
             feedback.replies.add(reply.id)
             feedback.save()
             return self.render_to_response(self.get_context_data(form=form))
+     
         else:
             return self.render_to_response(self.get_context_data(form=form))
-def profile_update_view(request, client_uuid):
-    client = get_object_or_404(Client, uuid=client_uuid)
-    print("request.user.is_viewer()", request.user.is_viewer())
-    if request.user.is_viewer():
-        client.is_viewer_viewed =True
-        client.is_active =True
-        client.save()
-    if request.method == 'POST':
-        form = ProfileUpdateForm(request.POST, instance=client)
-        if form.is_valid():
-            form.save()
-            # Redirect to a success page or perform other actions
-    else:
-        form = ProfileUpdateForm(instance=client)
 
-    return render(request, 'teamViewer/client_update.html', {'form': form, "client": client})
+def create_project_studies(request, study_uuid):
+    # Check if the request method is post
+    if request.method == 'POST':
+        project = get_object_or_404(Project, uuid=study_uuid)
+        # Get the request body as a JSON object
+        data = json.loads(request.body)
+        # Get the list of studies from the data
+        list_studies = data.get('list_studies')
+        # Check if the list is not empty
+        if list_studies:
+            # Loop through the list of studies
+            for study in list_studies:
+                # Get the title, price, count, start date, and end date from the study
+                title = study.get('title')
+                price = study.get('price')
+                count = study.get('count')
+                start_date = study.get('startDate')
+                end_date = study.get('endDate')
+
+                # Add validation for start date and end date
+                start_date = datetime.today()
+                
+                end_date = (datetime.today() + timedelta(days=1))
+                # Create a new ProjectStudy object with the given data
+                new_study = ProjectStudy.objects.create(
+                    project=project,
+                    title=title,
+                    price=float(price),
+                    count=int(count),
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                # Save the new study to the database
+                new_study.save()
+            # Return a JSON response with a success message and the list of created studies
+            serializer = ProjectStudySerializer(ProjectStudy.objects.all(), many=True)
+            return JsonResponse({'message': 'Project studies created successfully', 'data': serializer.data})
+        else:
+            # Return a JSON response with an error message
+            return JsonResponse({'message': 'No studies provided'})
+    else:
+        # Return a JSON response with an error message
+        return JsonResponse({'message': 'Invalid request method'})
+
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.views import APIView
+
+class ProfileUpdateAPIView(APIView):
+    # Define a method to handle GET requests
+    def get(self, request, client_uuid):
+        # Get the client object from the database or raise a 404 error if not found
+        client = get_object_or_404(Client, uuid=client_uuid)
+        # Serialize the client object to a JSON format
+        serializer = ClientSerializer(client)
+        # Return a response with the serialized data
+        return Response(serializer.data)
+
+    # Define a method to handle POST requests
+    def post(self, request, client_uuid):
+        # Get the client object from the database or raise a 404 error if not found
+        client = get_object_or_404(Client, uuid=client_uuid)
+        # Deserialize the request data to a client object
+        serializer = ClientSerializer(client, data=request.data)
+        # Check if the data is valid
+        if serializer.is_valid():
+            # Save the updated client object to the database
+            serializer.save()
+            # Return a response with the updated data
+            return Response(serializer.data)
+        else:
+            # Return a response with the validation errors
+            return Response(serializer.errors)
 from django.shortcuts import render, redirect
 from django.views import View
 from project.models import DesignColors

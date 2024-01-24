@@ -25,7 +25,7 @@ class ProjectInline(admin.TabularInline):
     verbose_name_plural = 'Project'
 
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ('name', 'email', 'created_date')
+    list_display = ('name','client_access_key', 'needed_action','email', 'created_date')
     search_fields = ('name', 'email')
     list_filter = ('is_active', 'created_date')
     readonly_fields = ('created_date',)
@@ -34,7 +34,8 @@ class ClientAdmin(admin.ModelAdmin):
     def get_fields(self, request, obj=None):
         fields = super().get_fields(request, obj)
         if obj and obj.project_client():
-            fields += ('project_data',) # Include the associated project data field
+            pass
+            # fields += ('project_data',) # Include the associated project data field
         return fields
 
     def project_data(self, obj):
@@ -42,7 +43,8 @@ class ClientAdmin(admin.ModelAdmin):
         if project:
             return f"Project Name: {project.name}\nProject Description: {project.description}"
         return "No associated project found."
-
+    def client_access_key(self, obj):
+        return obj.uuid
     project_data.short_description = 'Associated Project'
 
-admin.site.register(Client)
+admin.site.register(Client,ClientAdmin)

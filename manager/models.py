@@ -46,13 +46,13 @@ class User(AbstractUser):
         try:
             manager = Manager.objects.get(user=self)
             return True
-        except Manager.DoesNotExist:
+        except :
             return False
     def is_viewer(self):
         try:
             viewer = Viewer.objects.get(user=self)
             # return True
-        except Viewer.DoesNotExist:
+        except:
             return False
         if viewer:
             return True
@@ -60,7 +60,7 @@ class User(AbstractUser):
         try:
             viewer = SitesManager.objects.get(user=self)
             # return True
-        except SitesManager.DoesNotExist:
+        except :
             return False
         if viewer.is_manager and viewer.is_active and viewer.branch:
             return True
@@ -68,7 +68,58 @@ class User(AbstractUser):
         try:
             viewer = SiteEng.objects.get(user=self)
             # return True
-        except SiteEng.DoesNotExist:
+        except :
             return False
         if viewer.is_active and viewer.branch:
             return True
+    def is_designer(self):
+        try:
+            viewer = SiteEng.objects.get(user=self)
+            # return True
+        except :
+            return False
+        if viewer.is_active and viewer.branch:
+            return True
+        
+        
+# class GuidelineContent(models.Model):
+#     message = models.CharField(max_length=1000, blank=True, null=True)
+#     is_seen = models.BooleanField(default=False)
+#     is_finished = models.BooleanField(default=False)
+#     manager = models.ForeignKey('GuidanceManager', on_delete=models.CASCADE)
+
+# class GuidanceManager(models.Model):
+#     user = models.OneToOneField(User, on_delete=models.CASCADE)
+#     engineers = models.on(User, related_name='guid_line_content', blank=True, through='Guideline')
+
+#     def send_guidelines(self, message):
+#         guideline = GuidelineContent.objects.create(message=message, manager=self)
+
+#     def get_engineers(self):
+#         return self.engineers.all()
+
+#     def get_guidelines(self):
+#         return GuidelineContent.objects.filter(manager =self)
+
+#     def mark_guideline_as_seen(self, guideline_id):
+#         guideline = self.get_guidelines.filter(id=guideline_id).first()
+#         if guideline:
+#             guideline.is_seen = True
+#             guideline.save()
+
+#     def mark_guideline_as_finished(self, guideline_id):
+#         guideline = GuidelineContent.objects.get(id=guideline_id)
+#         if guideline:
+#             guideline.is_finished = True
+#             guideline.save()
+
+#     def count_finished_guidelines(self):
+#         return self.get_guidelines().filter(is_finished=True).count()
+
+#     def calculate_finished_percentage(self):
+#         total_guidelines = self.get_guidelines().count()
+#         if total_guidelines > 0:
+#             finished_guidelines = self.count_finished_guidelines()
+#             percentage = (finished_guidelines / total_guidelines) * 100
+#             return percentage
+#         return 0

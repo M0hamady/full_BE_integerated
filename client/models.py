@@ -10,6 +10,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from twilio.rest import Client as tw_client
 
 from project.models import Project
+from project.slck import send_slack_notification
 
 # from markting.models import Marketing
 
@@ -25,14 +26,14 @@ class Client(models.Model):
     ]
     add_by = models.ForeignKey('markting.Marketing', on_delete=models.SET_NULL,null=True,blank=True)
     name = models.CharField(max_length=150)
-    slack_channel = models.CharField(max_length=150,null=True)
+    slack_channel_name = models.CharField(max_length=150,null=True)
     email = models.EmailField(null=True,blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     number = models.CharField(max_length=150, null=True, blank=True)
     location = models.CharField(max_length=150, null=True, blank=True)
     locationLink = models.CharField(max_length=150, validators=[URLValidator(message='Enter a valid Google Maps location link.')], null=True, blank=True)
     coming_from = models.CharField(max_length=150, choices=SOCIAL_CHOICES, null=True, blank=True)
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True,verbose_name="Client Login License")
     is_active = models.BooleanField(default=True)
     is_viewer_viewed =models.BooleanField(default=False)
     date_viewer_viewed =models.DateTimeField( null=True,blank=True)
@@ -50,7 +51,7 @@ class Client(models.Model):
     is_Project_done = models.BooleanField(default=False)
     notes_for_home = models.TextField(null=True, blank=True)
     preferred_license_method = models.CharField(max_length=150, choices=LICENSE_METHOD_CHOICES, null=True, blank=True)
-    
+    company_percentage = models.IntegerField(default= 15)
     def __str__(self):
         return self.name
     
@@ -61,11 +62,19 @@ class Client(models.Model):
             return Project.objects.get(client__uuid=self.uuid)
         except ObjectDoesNotExist:
             return None
+    def viewer_message(self):
+        text  = f'''
+                        تم اضافة عميل جديد قم/ي باستكمال البيانات
+                        https://www.backend.support-constructions.com/client/{self.uuid}/update/
+                    '''
+        return text
     def save(self, *args, **kwargs):
         current_datetime = datetime.now()
         is_new_client = self.pk is None
-        if self.slack_channel is not None and not self.slack_channel.startswith("#"):
-            self.slack_channel = f"#{self.slack_channel}"  # Check if it's a new client (not yet saved)  # Check if it's a new client (not yet saved)
+        send_slack_notification("#new-customers",self.generate_welcome_message())
+        send_slack_notification("#mo3aynat",self.viewer_message())
+        if self.slack_channel_name is not None and not self.slack_channel_name.startswith("#"):
+            self.slack_channel_name = f"#{self.slack_channel_name}"  # Check if it's a new client (not yet saved)  # Check if it's a new client (not yet saved)
         super().save(*args, **kwargs)  # Save the client first
     def action_needed(self):
         
@@ -77,7 +86,25 @@ class Client(models.Model):
             return f"team viewer: {self.name} action in need"
         if self. calculate_data_completion_percentage2() > 50 :
             return f"technical manager: {self.name} action in need"
-        
+            
+    def needed_action(self):
+        completion_percentage = self.calculate_data_completion_percentage2()
+
+        if 10 < completion_percentage < 20:
+            return "نحتاج إلى استكمال بيانات المعاينة."
+
+        if 15 < completion_percentage < 40:
+            try:
+                project = Project.objects.get(client=self)
+                if not project.assign_to_2d_designer:
+                    return 'اشر لمصمم الـ 2D.'
+                elif not project.assign_to_3d_designer:
+                    return 'اشر لمصمم الـ 3D.'
+            except:
+                pass
+            return "نحتاج إلى استكمال دراسة المشروع."
+
+        return "لا توجد إجراءات مطلوبة حاليًا."
     def get_profile_completion_actions(self):
         actions = []
 
@@ -231,6 +258,7 @@ class Payment(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     def __str__(self):
-        return f"Payment of {self.amount} for client {self.client.name}"    
+        return f"Payment of {self.amount} for client {self.client.name}"  
+      
     
     

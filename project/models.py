@@ -5,7 +5,9 @@ from django.core.validators import FileExtensionValidator
 import uuid 
 from multiselectfield import MultiSelectField
 from project.forms import ColorChoicesFormField
+from project.slck import send_slack_notification
 from supportconstruction import settings
+from django.template.loader import render_to_string
 
 from django.db.models.signals import pre_delete
 from PIL import Image
@@ -56,12 +58,29 @@ class Project(models.Model):
             floors_data.append(floor_data)
         
         return floors_data
-    
+    @property
+    def total_price_study(self):
+        all_projects_prices=ProjectStudy.objects.filter(project=self)
+        return all_projects_prices.aggregate(total_price=models.Sum('price'))['total_price']  
+    @property
+    def project_percentage(self):
+        percentage=self.client.company_percentage
+        return f'{percentage}%' 
+    @property
+    def total_price_study_and_percentage(self):
+        percentage = self.client.company_percentage
+        all_projects_prices = ProjectStudy.objects.filter(project=self).aggregate(total_price=models.Sum('price'))['total_price']
+        if all_projects_prices:
+            return all_projects_prices + all_projects_prices * (percentage / 100)
+        else:
+            return 0
     @property
     def study(self):
         studies = ProjectStudy.objects.filter(project=self)
+        total_cost = 0
         studies_data=[]
         for study in studies:
+            total_cost += study.total_price
             study_data = {
                 'study_name': study.title,
                 'description': study.description,
@@ -75,10 +94,55 @@ class Project(models.Model):
                 'uuid': study.uuid,
             }
             studies_data.append(study_data)
+        studies= {
+           'studies_data':studies_data,
+           'total_cost' : total_cost, 
+           'company_perc' : self.client.company_percentage, 
+           'company_perc_and_total' : (total_cost * (self.client.company_percentage / 100)) +total_cost
+        }
+        return studies
+    def branch_message(self):
+        text = '''
+    :heavy_plus_sign: New project added to your projects. Please follow the link below for more details:
+    <https://www.backend.support-constructions.com/client/project/{0}/update/>
+    '''.format(self.client.uuid)
+
+        return text
+
+    def branch_message_study(self):
+        text = '''
+    :clipboard: Perform a study using the link below:
+    <https://www.backend.support-constructions.com/project-study/create/{0}/>
+    '''.format(self.client.uuid)
+
+        return text
+    def get_project_update(self, old_project):
+        update = f"*{self.client}* updated data at `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n\n"
         
-        return studies_data
+        fields = self._meta.fields
+        
+        for field in fields:
+            field_name = field.name
+            old_value = getattr(old_project, field_name)
+            new_value = getattr(self, field_name)
+            
+            if old_value != new_value:
+                update += f"• *{field.verbose_name}:*\n    From: `{old_value}`\n    To: `{new_value}`\n"
+        
+        return update
+    
 
     def save(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        if self.pk:
+            old_project = Project.objects.get(pk=self.pk)
+            project_update = self.get_project_update(old_project)
+            
+            if project_update:
+                send_slack_notification(self.branch.slack, project_update)
+        if self.branch and not self.pk:
+            send_slack_notification(self.branch.slack,self.branch_message())
+            send_slack_notification(self.branch.slack,self.branch_message_study())
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
@@ -338,6 +402,7 @@ class ProjectBasic(models.Model):
             return self.project.client.name
         except: return None 
     def save(self, *args, **kwargs):
+
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
@@ -426,8 +491,16 @@ class ProjectImage2D(models.Model):
     def __str__(self):
         return self.name
     
+    def message_adding_new_pic(self):
+        text = f'''
+                تم اضافة صورة للعميل يرجي المراجعه علي الرابط التالي:
+                https://www.backend.support-constructions.com/projects/{self.project.client.uuid}/images/
+
+                '''
+        return text
     def save(self, *args, **kwargs):
         if not self.uuid:
+            send_slack_notification(self.project.branch.slack,self.message_adding_new_pic())
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
     def resize_image(self):
@@ -481,8 +554,19 @@ class CommentImage2D(models.Model):
     
     def __str__(self):
         return self.text
+    
+    def message_adding_new_pic_comment(self):
+        text = f'''
+                علق العميل علي الصورة باسم {self.project_image.name} :
+                "{self.text}"
+                يمكنك الرد علي الرابط التالي
+                https://www.backend.support-constructions.com/projects/{self.project_image.project.client.uuid}/images/
+
+                '''
+        return text
     def save(self, *args, **kwargs):
         if not self.uuid:
+            send_slack_notification(self.project_image.project.branch.slack,self.message_adding_new_pic_comment())
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
 
@@ -673,11 +757,12 @@ class Floor(models.Model):
             if len(image.all_images()) > 0:
                 test.append(image.all_images())
         return test
+    def last_feed(self):
+        return FeedbackFloor.objects.filter(floor=self).last()
     def calculate_percentage_finished(self):
-        total_steps = Step.objects.filter(floor = self).count()
+        total_steps = self.steps_count()
         finished_steps = Step.objects.filter(floor = self, status='FINISHED').count()
-        print((finished_steps / total_steps) * 100, "total")
-        if total_steps > 0:
+        if total_steps > 0 and finished_steps > 0:
             return (finished_steps / total_steps) * 100
         else:
             return 0
@@ -692,22 +777,23 @@ class Floor(models.Model):
         return total_budget
 
     def calculate_duration(self):
-        if self.steps:
+        try:
+            if self.steps:
             # Step 1: Retrieve all start dates for the steps
-            start_dates = list(Step.objects.filter(floor=self).values_list('start_date', flat=True))
-            
-            # Step 2: Find the minimum start date
-            min_start_date = min(start_dates)
+                start_dates = list(Step.objects.filter(floor=self).values_list('start_date', flat=True))
+                
+                # Step 2: Find the minimum start date
+                min_start_date = min(start_dates)
 
-            # Step 3: Retrieve all end dates for the steps
-            end_dates = list(Step.objects.filter(floor=self).values_list('end_date', flat=True))
-            print(end_dates)
-            # Step 4: Find the maximum end date
-            max_end_date = max(end_dates)
-            print (min_start_date, max_end_date)
-            if min_start_date and max_end_date:
-                return (max_end_date - min_start_date).days
-        return None
+                # Step 3: Retrieve all end dates for the steps
+                end_dates = list(Step.objects.filter(floor=self).values_list('end_date', flat=True))
+                print(end_dates)
+                # Step 4: Find the maximum end date
+                max_end_date = max(end_dates)
+                print (min_start_date, max_end_date)
+                if min_start_date and max_end_date:
+                    return (max_end_date - min_start_date).days
+        except:return 0
     def calculate_duration_coming(self):
     # Get the current date
         current_day = datetime.now().date()
@@ -716,7 +802,7 @@ class Floor(models.Model):
         end_dates = list(Step.objects.filter(floor=self).values_list('end_date', flat=True))
 
         # Filter end dates that are greater than or equal to the current day
-        upcoming_end_dates = [date for date in end_dates if date >= current_day]
+        upcoming_end_dates = [date for date in end_dates if date is not None and date >= current_day]
 
         if upcoming_end_dates:
             # Find the maximum end date among the upcoming end dates
@@ -729,24 +815,36 @@ class Floor(models.Model):
         return None
     def start_date(self):
         start_dates = list(Step.objects.filter(floor=self).values_list('start_date', flat=True))
-        
-        # Step 2: Find the minimum start date
-        min_start_date = min(start_dates)
-        print(min_start_date.strftime('%Y-%m-%d'))
-        return f"{min_start_date.strftime('%Y-%m-%d')}"
+        start_dates = [date for date in start_dates if date is not None]
+        if start_dates:
+            min_start_date = min(start_dates)
+            return min_start_date.strftime('%Y-%m-%d')
+        else:
+            return None
+
     def end_date(self):
-        start_dates = list(Step.objects.filter(floor=self).values_list('end_date', flat=True))
-        
-        # Step 2: Find the minimum start date
-        min_start_date = max(start_dates)
-        print(min_start_date.strftime('%Y-%m-%d'))
-        return f"{min_start_date.strftime('%Y-%m-%d')}"
+        end_dates = list(Step.objects.filter(floor=self).values_list('end_date', flat=True))
+        end_dates = [date for date in end_dates if date is not None]
+        if end_dates:
+            max_end_date = max(end_dates)
+            return max_end_date.strftime('%Y-%m-%d')
+        else:
+            return None
+    def generate_slack_message(self):
+        message = f"""تمت إضافة بند جديد بنجاح: {self.name}/n/n لمشروع {self.project.name}"""
+        return message
+
     def save(self, *args, **kwargs):
         if not self.uuid:
+            if self.project.branch :
+                send_slack_notification(self.project.branch.slack,self.generate_slack_message())
+            elif self.site_manager.branch:
+                send_slack_notification(self.site_manager.branch.slack,self.generate_slack_message())
+            else: send_slack_notification("#new-customers",self.generate_slack_message())
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
     def __str__(self) :
-        return self.name
+        return self.name + '_'+self.project.client.name
     def get_feedbacks(self):
         feedbacks = FeedbackFloor.objects.filter(floor=self).values("message", "status", "is_seen", "uuid")
         feedbacks_data = []
@@ -754,6 +852,10 @@ class Floor(models.Model):
         #     feedback["replies"] = list(ReplyFloor.objects.filter(feedback_floor__uuid=feedback["uuid"]).values("message","site_manager","site_Eng","uuid"))
         #     feedbacks_data.append(feedback)
         return feedbacks_data
+    def feedbacks(self):
+        feedbacks = FeedbackFloor.objects.filter(floor=self)
+       
+        return feedbacks
 class ProjectStudy(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     title = models.CharField(max_length=150)
@@ -766,20 +868,31 @@ class ProjectStudy(models.Model):
     end_date = models.DateField(null=True, blank=True)
     feedback_client = models.ManyToManyField('Feedback', related_name='project_feedbacks',blank=True)
     uuid = models.UUIDField( editable=False, )
-
+    
     def __str__(self):
-        return self.title
-
+        return self.title+ "_"+self.project.name
+    def generate_slack_message(self):
+        message_arabic = f"تمت إضافة دراسة جديدة '{self.title}' إلى المشروع '{self.project.name}'."
+        message_english = f"A new study '{self.title}' has been added to the project '{self.project.name}'."
+        
+        message = f"Arabic (العربية):\n{message_arabic}\n\nEnglish:\n{message_english}\n\nurl: https://www.backend.support-constructions.com/project-study/create/{self.project.client.uuid}/"
+        return message
     def save(self, *args, **kwargs):
         # Calculate the total price based on the count and price
         self.total_price = self.count * self.price
         if not self.uuid:
+            if self.project.branch:
+                send_slack_notification(self.project.branch.slack,self.generate_slack_message())
+            else: send_slack_notification("#new-customers",self.generate_slack_message())
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
     def get_feeds_with_replies(self):
         feeds = Feedback.objects.filter(project_study= self)
         result = []
         for feed in feeds:
+            feed.is_seen =True
+            feed.is_process= True
+            feed.save()
             result.append({
                 'feed':feed.message,
                 'id':feed.id,
@@ -789,7 +902,7 @@ class ProjectStudy(models.Model):
                 'uuid_target':'#'+f'{feed.uuid}',
             })
         return result
-            
+         
 class FeedbackFloor(models.Model):
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE)
     message = models.CharField(max_length=1000)
@@ -836,10 +949,26 @@ class Feedback(models.Model):
     uuid = models.UUIDField( editable=False, )
 
     def __str__(self):
-        return self.message
+        message = "F "
+        
+        if self.project_study:
+            message += self.project_study.project.name
+
+        return message 
+    def message_(self):
+        message = f"*Message*: {self.message}\n"
+        message += f"*Created At*: {self.created_at}\n"
+        message += f"*Is Accepted*: {self.is_accepted}\n"
+        message += f"*Is Seen*: {self.is_seen}\n"
+        message += f"*Is Process*: {self.is_process}\n"
+        message += f"*Is Finished*: {self.is_finished}\n"
+        
+        return message
 
     def save(self, *args, **kwargs):
         if not self.uuid:
+            send_slack_notification("#customer-service",self.message_())
+            send_slack_notification(self.project_study.project.branch.slack,self.message_())
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
     def get_current_action(self):
@@ -873,7 +1002,7 @@ class ReplyFloor(models.Model):
     
 class Reply(models.Model):
     feedback = models.ForeignKey(Feedback, on_delete=models.CASCADE)
-    site_manager = models.ForeignKey(SiteEng, on_delete=models.SET_NULL, null=True, blank=True)
+    site_eng = models.ForeignKey(SiteEng, on_delete=models.SET_NULL, null=True, blank=True)
     site_manager = models.ForeignKey(SitesManager, on_delete=models.SET_NULL,null=True, blank=True)
     message = models.CharField(max_length=1000)
     uuid = models.UUIDField( editable=False, )
@@ -905,7 +1034,27 @@ class Step(models.Model):
     uuid = models.UUIDField( editable=False, unique=True)
     def __str__(self) :
         return self.name + '_' + self.floor.name + '_' +self.floor.project.client.name
+    
+    def get_step_update(self, old_project):
+        update = f"*{self.name}* updated data at `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n\n"
+        
+        fields = self._meta.fields
+        
+        for field in fields:
+            field_name = field.name
+            old_value = getattr(old_project, field_name)
+            new_value = getattr(self, field_name)
+            
+            if old_value != new_value:
+                update += f"• *{field.verbose_name}:*\n    From: `{old_value}`\n    To: `{new_value}`\n"
+        
+        return update
     def save(self, *args, **kwargs):
+        if self.pk:
+            old_project = Step.objects.get(pk=self.pk)
+            try:
+                send_slack_notification(self.floor.project.branch.slack,self.get_step_update(old_project))
+            except:pass
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
@@ -935,6 +1084,9 @@ class StepImage(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.uuid:
+            try:
+                send_slack_notification(self.step.floor.project.branch.slack,f"تم اضافة صورة الي {self.step.name}")
+            except:pass
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
 

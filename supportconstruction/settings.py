@@ -100,6 +100,16 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+# DATABASES = {
+# 'default': {
+# 'ENGINE': 'django.db.backends.mysql',
+# 'NAME': 'M0hamady$support_constructions',
+# 'USER': 'M0hamady',
+# 'PASSWORD': 'Mohammedy@258147369',
+# 'HOST': 'M0hamady.mysql.pythonanywhere-services.com', # Or an IP Address that your DB is hosted on
+# 'PORT': '3306',
+# }
+# }
 CORS_ORIGIN_ALLOW_ALL = True
 
 # Password validation

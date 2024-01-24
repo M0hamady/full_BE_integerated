@@ -265,6 +265,7 @@ class ProjectSerializer_client(serializers.ModelSerializer):
     budget = serializers.SerializerMethodField()
     study = serializers.SerializerMethodField()
     client_pics =  serializers.SerializerMethodField()
+    client_license =  serializers.SerializerMethodField()
     
     class Meta:
         model = Project
@@ -272,6 +273,8 @@ class ProjectSerializer_client(serializers.ModelSerializer):
 
     def get_is_assigned_to_2d(self,obj):
         return obj.is_assigned_to_2d
+    def get_client_license(self,obj):
+        return obj.client.uuid
     def get_client_pics(self,obj):
         images = ProjectImage.objects.filter(project= obj)
         list_url = []

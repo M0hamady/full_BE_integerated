@@ -2,7 +2,7 @@ import requests
 
 
 def create_channel_and_get_invite_link(channel_name):
-    slack_token = "xoxb-6324626309540-6324707502724-LsQy4PQRrBg5dXiWSYrlG1sT"  # Replace with your Slack API token
+    slack_token = "xoxb-6324626309540-6426918789462-FWfhhaWhS9FTOuwQZNc9Pvdx"  # Replace with your Slack API token
     url = "https://slack.com/api/conversations.create"
     headers = {
         "Authorization": f"Bearer {slack_token}",
@@ -40,7 +40,7 @@ def create_channel_and_get_invite_link(channel_name):
     return invite_link
 
 def send_slack_notification(channel, message, is_update=False):
-    slack_token = "xoxb-6324626309540-6324707502724-LsQy4PQRrBg5dXiWSYrlG1sT"  # Replace with your Slack API token
+    slack_token = ""  # Replace with your Slack API token
     url = "https://slack.com/api/chat.postMessage"
     headers = {
         "Authorization": f"Bearer {slack_token}",
