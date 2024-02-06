@@ -2,7 +2,11 @@ import uuid
 from django.conf import settings 
 from django.db import models
 from django.contrib.auth.models import AbstractUser, Group, User, Permission
+from designer.models import Designer
+from manager.location_helper import get_place_from_location
+from markting.models import Marketing
 from project.models import SiteEng, SitesManager
+from project.slck import send_slack_notification
 
 from teamview.models import Viewer
 
@@ -45,9 +49,11 @@ class User(AbstractUser):
     def is_manager(self):
         try:
             manager = Manager.objects.get(user=self)
-            return True
         except :
             return False
+        if manager:
+            return True
+            
     def is_viewer(self):
         try:
             viewer = Viewer.objects.get(user=self)
@@ -74,14 +80,37 @@ class User(AbstractUser):
             return True
     def is_designer(self):
         try:
-            viewer = SiteEng.objects.get(user=self)
+            viewer = Designer.objects.get(user=self)
             # return True
         except :
             return False
         if viewer.is_active and viewer.branch:
             return True
+    def is_CustomerServices(self):
+        try:
+            viewer = Marketing.objects.get(user=self)
+            # return True
+        except :
+            return False
+        if viewer.is_active :
+            return True
         
         
+        
+class UserLocation(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Location of {self.user.username} at {self.timestamp}"        
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        place = get_place_from_location(self.latitude, self.longitude)
+        send_slack_notification('#locations', f'New location: {place}')
+
 # class GuidelineContent(models.Model):
 #     message = models.CharField(max_length=1000, blank=True, null=True)
 #     is_seen = models.BooleanField(default=False)

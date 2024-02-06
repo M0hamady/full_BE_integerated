@@ -8,7 +8,7 @@ from project.forms import ColorChoicesFormField
 from project.slck import send_slack_notification
 from supportconstruction import settings
 from django.template.loader import render_to_string
-
+from django.db.models import Q
 from django.db.models.signals import pre_delete
 from PIL import Image
 from io import BytesIO
@@ -64,16 +64,20 @@ class Project(models.Model):
         return all_projects_prices.aggregate(total_price=models.Sum('price'))['total_price']  
     @property
     def project_percentage(self):
-        percentage=self.client.company_percentage
-        return f'{percentage}%' 
+        try:
+            percentage=self.client.company_percentage
+            return f'{percentage}%' 
+        except: return 0
     @property
     def total_price_study_and_percentage(self):
-        percentage = self.client.company_percentage
-        all_projects_prices = ProjectStudy.objects.filter(project=self).aggregate(total_price=models.Sum('price'))['total_price']
-        if all_projects_prices:
-            return all_projects_prices + all_projects_prices * (percentage / 100)
-        else:
-            return 0
+        try:
+            percentage=self.client.company_percentage
+            all_projects_prices = ProjectStudy.objects.filter(project=self).aggregate(total_price=models.Sum('price'))['total_price']
+            if all_projects_prices:
+                return all_projects_prices + all_projects_prices * (percentage / 100)
+            else:
+                return 0
+        except:return 0
     @property
     def study(self):
         studies = ProjectStudy.objects.filter(project=self)
@@ -94,12 +98,18 @@ class Project(models.Model):
                 'uuid': study.uuid,
             }
             studies_data.append(study_data)
-        studies= {
-           'studies_data':studies_data,
-           'total_cost' : total_cost, 
-           'company_perc' : self.client.company_percentage, 
-           'company_perc_and_total' : (total_cost * (self.client.company_percentage / 100)) +total_cost
-        }
+        studies = {
+                'studies_data': studies_data,
+                'total_cost': total_cost,
+                'company_perc': None,
+                'company_perc_and_total': None
+            }
+
+        try:
+            studies['company_perc'] = self.client.company_percentage
+            studies['company_perc_and_total'] = (total_cost * (self.client.company_percentage / 100)) + total_cost
+        except AttributeError:
+            pass
         return studies
     def branch_message(self):
         text = '''
@@ -168,11 +178,29 @@ class Project(models.Model):
                 completed_conditions += each_floor.calculate_percentage_finished() / 100 
 
         if total_conditions >0:
-            return (completed_conditions / total_conditions) * 100
-        return 0
+            return f'{int((completed_conditions / total_conditions) * 100)}'
+        return '0'
+    @property
+    def project_works_percentage_needs_approve(self):
+        all_floors =Floor.objects.filter(project =self)
+        total_conditions = all_floors.count()
+        completed_conditions = 0
+        for each_floor in all_floors:
+            if each_floor.calculate_percentage_finished_need_approved() > 0:
+                    completed_conditions += each_floor.calculate_percentage_finished_need_approved() / 100 
+
+        if total_conditions > 0:
+            return f'{int((completed_conditions / total_conditions) * 100)}'
+        return '0'
     @property
     def basic_data_percentage(self):
         return ProjectBasic.objects.get(project = self).project_basic_percentage()
+    
+    def get_floors(self):
+        return Floor.objects.filter(project=self)
+    
+    def steps(self):
+        return Step.objects.filter(floor__in=self.get_floors())
 
 # data in details
 class WallDecorations(models.Model):
@@ -347,6 +375,24 @@ class Heater(models.Model):
         if not self.uuid:
             self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
+class Location_airconditioning(models.Model):
+    name = models.CharField( max_length=20)
+    uuid = models.UUIDField( editable=False, unique=True)
+    def __str__(self):
+        return self.name
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
+class Electronics_kitchen(models.Model):
+    name = models.CharField( max_length=20)
+    uuid = models.UUIDField( editable=False, unique=True)
+    def __str__(self):
+        return self.name
+    def save(self, *args, **kwargs):
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        super().save(*args, **kwargs)
 # end one option choice
 # finished data in details adding comments to project
 class Comment(models.Model):
@@ -391,7 +437,11 @@ class ProjectBasic(models.Model):
     is_add_fur_2d = models.BooleanField(verbose_name="do_you_want_to_add_furniture_?",default=True)
     is_boiler = models.BooleanField(verbose_name="is_there_any_boiler?",default=False)
     count_boiler = models.PositiveBigIntegerField(default=0,null=True)
+    count_airconditioning = models.PositiveBigIntegerField(default=0,null=True)
+    location_airconditioning = models.ManyToManyField(Location_airconditioning, verbose_name="location_airconditioning",blank=True)
+    electronics_kitchen = models.ManyToManyField(Electronics_kitchen, verbose_name="electronics_kitchen",blank=True)
     count_kids = models.PositiveBigIntegerField(default=0,null=True)
+    count_family = models.PositiveBigIntegerField(default=0,null=True)
     count_kids_male = models.PositiveBigIntegerField(default=0,null=True)
     count_kids_female = models.PositiveBigIntegerField(default=0,null=True)
     count_rooms = models.PositiveBigIntegerField(default=0,null=True)
@@ -761,7 +811,18 @@ class Floor(models.Model):
         return FeedbackFloor.objects.filter(floor=self).last()
     def calculate_percentage_finished(self):
         total_steps = self.steps_count()
-        finished_steps = Step.objects.filter(floor = self, status='FINISHED').count()
+        finished_steps = Step.objects.filter(
+                Q(floor=self, status='FINISHED') | Q(floor=self, status='finished')
+            ).count()
+        if total_steps > 0 and finished_steps > 0:
+            return (finished_steps / total_steps) * 100
+        else:
+            return 0
+    def calculate_percentage_finished_need_approved(self):
+        total_steps = self.steps_count()
+        finished_steps = Step.objects.filter(
+                 Q(floor=self, status='FINISHED')
+            ).count()
         if total_steps > 0 and finished_steps > 0:
             return (finished_steps / total_steps) * 100
         else:
@@ -835,13 +896,15 @@ class Floor(models.Model):
         return message
 
     def save(self, *args, **kwargs):
-        if not self.uuid:
-            if self.project.branch :
-                send_slack_notification(self.project.branch.slack,self.generate_slack_message())
-            elif self.site_manager.branch:
-                send_slack_notification(self.site_manager.branch.slack,self.generate_slack_message())
-            else: send_slack_notification("#new-customers",self.generate_slack_message())
-            self.uuid = uuid.uuid4()
+        try:
+            if not self.uuid:
+                if self.project.branch :
+                    send_slack_notification(self.project.branch.slack,self.generate_slack_message())
+                elif self.site_manager.branch:
+                    send_slack_notification(self.site_manager.branch.slack,self.generate_slack_message())
+                else: send_slack_notification("#new-customers",self.generate_slack_message())
+        except:send_slack_notification("#new-customers",self.generate_slack_message())
+        self.uuid = uuid.uuid4()
         super().save(*args, **kwargs)
     def __str__(self) :
         return self.name + '_'+self.project.client.name
@@ -1035,6 +1098,21 @@ class Step(models.Model):
     def __str__(self) :
         return self.name + '_' + self.floor.name + '_' +self.floor.project.client.name
     
+    @property
+    def get_null_fields(self):
+        null_fields = []
+        if self.start_date is None:
+            null_fields.append('تاريخ البدء')
+        if self.end_date is None:
+            null_fields.append('تاريخ الانتهاء')
+
+        if null_fields:
+            message = "الحقول التالية فارغة حاليًا: {}".format("، ".join(null_fields))
+            message += "يرجى اتخاذ الإجراء المناسب."
+        else:
+            message = "لا توجد حقول فارغة شكرا لك."
+
+        return message
     def get_step_update(self, old_project):
         update = f"*{self.name}* updated data at `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n\n"
         

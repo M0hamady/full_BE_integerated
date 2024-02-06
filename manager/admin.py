@@ -6,7 +6,10 @@ from django.contrib.auth.admin import UserAdmin
 admin.site.register(Manager)
 admin.site.register(User, UserAdmin)
 
-
+@admin.register(UserLocation)
+class UserLocationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'latitude', 'longitude', 'timestamp')
+    list_filter = ('user', 'timestamp')
 # class GuidelineInline(admin.TabularInline):
 #     model = GuidelineContent
 #     extra = 0

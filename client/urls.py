@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ClientByUUIDView, ClientRegistrationAPIView, ClientRegistrationView, ContactUsView, client_data, client_retrieve_view, get_all_clients,  client_create_view, get_all_clients_viewer, get_all_clients_viewer_today_meetings, get_all_projects, get_client, index, update_client
+from .views import AddClientActionView, ClientByUUIDView, ClientProjectUpdateView, ClientRegistrationAPIView, ClientRegistrationView, ContactUsView, client_data, client_retrieve_view, get_all_clients,  client_create_view, get_all_clients_viewer, get_all_clients_viewer_today_meetings, get_all_projects, get_client, index, update_client
 
 urlpatterns = [
     # path('', index, name='client'),
@@ -23,5 +23,8 @@ urlpatterns = [
     # get project pics
     # get payments
     path('api/contact/', ContactUsView.as_view(), name='contact-api'),
+    path('add_client_action/<int:client_id>/', AddClientActionView, name='add_client_action'),
+    path('client/update/self/<uuid:uuid>/', ClientProjectUpdateView.as_view(), name='client_project_update_self'),
+
 ]
 # 010056529

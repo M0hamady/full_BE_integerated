@@ -1,5 +1,6 @@
 from datetime import datetime
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
+from client.forms import ActionForm, ClientProjectUpdateForm, NotesFormSet, ProjectBasicUpdateForm
 from markting.models import Marketing
 from project.models import Project, ProjectBasic
 from project.serializers import BasicProjectSerializer, ProjectSerializer, ProjectSerializer_client
@@ -12,7 +13,7 @@ from project.slck import create_channel_and_get_invite_link, send_slack_notifica
 from supportconstruction import settings
 from teamview.models import Viewer
 from technical.models import Technical
-from .models import Client, Contact
+from .models import Client, ClientAction, Contact
 from .serializers import ClientAPI, ClientRegistrationSerializer, ClientSerializer, ClientUpdateSerializer, ClientWebSerializer, ContactSerializer
 from rest_framework.views import APIView
 
@@ -598,3 +599,49 @@ class ClientRegistrationAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+  
+  
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def AddClientActionView(request, client_id):
+    client = Client.objects.get(id=client_id)
+
+    if request.method == 'POST':
+        form = ActionForm(request.POST)
+        if form.is_valid():
+            action = form.cleaned_data['action']
+            
+            client_action = ClientAction.objects.create(client=client, action=action)
+            
+            return redirect('update_notes',client_action.id)
+    else:
+        form = ActionForm()
+    
+    return render(request, 'markting/add_client_action.html', {'form': form})
+
+
+
+class ClientProjectUpdateView(View):
+    template_name = 'client/clientForm.html'
+
+    def get(self, request, uuid):
+        client = get_object_or_404(Client, uuid=uuid)
+        client_form = ClientProjectUpdateForm(instance=client)
+        projectbasic_form = ProjectBasicUpdateForm()
+        return render(request, self.template_name, {'client_form': client_form, 'projectbasic_form': projectbasic_form,'client': client})
+
+    def post(self, request, uuid):
+        client = get_object_or_404(Client, uuid=uuid)
+        client_form = ClientProjectUpdateForm(request.POST, instance=client)
+        projectbasic_form = ProjectBasicUpdateForm(request.POST)
+
+        if client_form.is_valid() and projectbasic_form.is_valid():
+            client_form.save()
+            projectbasic = projectbasic_form.save(commit=False)
+            projectbasic.client = client
+            projectbasic.save()
+            return redirect('client_project_update_self', uuid=uuid)  # Replace 'client_detail' with the URL name of the client detail view
+
+        return render(request, self.template_name, {'client_form': client_form, 'projectbasic_form': projectbasic_form})

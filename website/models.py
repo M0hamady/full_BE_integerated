@@ -44,8 +44,8 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.dispatch import receiver
 
 class Pic(models.Model):
-    title = models.CharField(max_length=255)
-    description = models.TextField()
+    title = models.CharField(max_length=255, default='support construction', null=True, blank=True)
+    description = models.TextField(default='support construction', null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='pics/')
     def __str__(self):

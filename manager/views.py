@@ -17,6 +17,7 @@ from django.urls import reverse_lazy
 from datetime import datetime, timedelta
 
 from client.models import Client
+from manager.models import UserLocation
 from project.serializers import ProjectStudySerializer
 from .forms import ProjectImage2DForm, ReplyCommentImage2DForm, ReplyForFeeds
 from project.models import CeilingDecoration, CeilingGypsumBoard, CeramicExisted, ClientOpenToMakeEdit, CommentImage2D, DesignStyle, DoorProvided, Feedback, FlooringMaterial, Furniture, Heater, LightingType, PlumbingEstablished, Project, ProjectBasic, ProjectImage2D, ProjectStudy, ReplyCommentImage2D, SitesManager, ToiletType, WallDecorations
@@ -33,10 +34,9 @@ class Login(LoginView):
         # Log in the user
         user = form.get_user()
         login(self.request, user)
-        print(user.is_viewer(), "is viewer")
         if user.is_manager() or user.is_superuser:
             return redirect('meeting')
-        elif user.is_viewer():
+        elif user.is_viewer(): 
             return redirect('viewer_dash')
         elif user.is_designer():
             return redirect('viewer_dash')
@@ -44,11 +44,46 @@ class Login(LoginView):
             return redirect('site_eng')
         elif user.is_branchManager():
             return redirect('site_manager')
+        elif user.is_CustomerServices():
+            return redirect('CustomerServicesView')
         # return redirect('meeting')
         
        
 
         return super().form_valid(form)
+
+
+def track_location(request):
+    if request.method == 'POST':
+        latitude = request.POST.get('latitude')
+        longitude = request.POST.get('longitude')
+        
+        # Save the location data to the UserLocation model
+        user_location = UserLocation.objects.create(user=request.user, latitude=latitude, longitude=longitude)
+        user_location.save()
+
+        return JsonResponse({'status': 'success'})
+    
+    return render(request, 'track_location.html')
+
+def get_all_users_location(request):
+    # Retrieve all UserLocation objects
+    user_locations = UserLocation.objects.all()
+
+    # Prepare the response data
+    users_locations = []
+    for user_location in user_locations:
+        users_locations.append({
+            'username': user_location.user.username,
+            'latitude': user_location.latitude,
+            'longitude': user_location.longitude
+        })
+
+    response_data = {
+        'usersLocations': users_locations
+    }
+
+    return JsonResponse(response_data)
 class Profile(LoginRequiredMixin, TemplateView):
     template_name = 'manager/index.html'
     def dispatch(self, request, *args, **kwargs):

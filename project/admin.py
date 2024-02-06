@@ -18,7 +18,7 @@ class ProjectBasicAdmin(admin.ModelAdmin):
     
 class ProjectAdmin(admin.ModelAdmin):
     inlines = (ProjectBasicInline,ProjectStudyBasicInline)
-    list_display = ( 'uuid','client', 'ref_budget','total_price_study','project_percentage','total_price_study_and_percentage','branch')
+    list_display = ( 'uuid','client','project_works_percentage', 'ref_budget','total_price_study','project_percentage','total_price_study_and_percentage','branch')
     list_filter = ('assign_to_2d_designer','assign_to_3d_designer','viewer','technical_user','branch' )
     search_fields = ('uuid',)
 from django.contrib import admin
@@ -37,7 +37,7 @@ class FloorAdmin(admin.ModelAdmin):
 
 admin.site.register(Floor, FloorAdmin)
 class StepAdmin(admin.ModelAdmin):
-    list_display = ('name', 'floor', 'status')
+    list_display = ('name', 'floor', 'get_null_fields','status')
     list_filter = ('floor', 'status', 'start_date', 'end_date')
     search_fields = ('name', 'floor__name', 'floor__project__client__name', 'start_date', 'end_date')
     list_editable = ('status',)

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Client, Payment
+from .models import Client, ClientAction, Payment
 from project.models import  Project, ProjectBasic, ProjectFile, ProjectImage
 admin.site.register(Payment)
 
@@ -48,3 +48,5 @@ class ClientAdmin(admin.ModelAdmin):
     project_data.short_description = 'Associated Project'
 
 admin.site.register(Client,ClientAdmin)
+admin.site.register(ClientAction)
+

@@ -2,7 +2,7 @@ import requests
 
 
 def create_channel_and_get_invite_link(channel_name):
-    slack_token = "xoxb-6324626309540-6426918789462-FWfhhaWhS9FTOuwQZNc9Pvdx"  # Replace with your Slack API token
+    slack_token = "xoxb-6324626309540-6537892501218-SesSzmLuohSE9wQXggT423HD"  # Replace with your Slack API token
     url = "https://slack.com/api/conversations.create"
     headers = {
         "Authorization": f"Bearer {slack_token}",

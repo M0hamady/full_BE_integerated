@@ -1,3 +1,11 @@
+import os
+import sys
+import django
+
+# Adjust the path to the Django project's settings.py accordingly
+sys.path.append('/home/M0hamady/supportconstruction')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'supportconstruction.settings')
+django.setup()
 from datetime import date
 from project.models import Step
 from project.slck import send_slack_notification

@@ -1,10 +1,12 @@
 from django.urls import path
-from.views import ProfileSiteEng, ProfileSiteEngTasks, ProfileSiteEngTasksToday, ProfileSiteManager, ProfileSiteManagerProjects, ProfileView, check_viewer_uuid, delete_photo, finish_step, reply_feed, upload_photo
+from.views import ProfileClient, ProfileSiteEng, ProfileSiteEngProjects, ProfileSiteEngTasks, ProfileSiteEngTasksToday, ProfileSiteManager, ProfileSiteManagerProjects, ProfileView, check_viewer_uuid, delete_photo, finish_step, reply_feed, upload_photo
 
 urlpatterns = [
     path('viewer/<uuid:uuid>/', check_viewer_uuid, name='check_viewer_uuid'),
     path('viewer/dash', ProfileView.as_view(), name='viewer_dash'),
     path('site-eng/dash/', ProfileSiteEng.as_view(), name='site_eng'),
+    path('site-eng/dash/projects/', ProfileSiteEngProjects.as_view(), name='site_engProjects'),
+    path('site-eng/client/profile/<int:client_id>', ProfileClient.as_view(), name='ProfileClient'),
     path('site-manager/dash/', ProfileSiteManager.as_view(), name='site_manager'),
     path('site-manager/dash/projects', ProfileSiteManagerProjects.as_view(), name='site_manager_projects'),
     path('floor/<int:floor_id>/tasks/', ProfileSiteEngTasks.as_view(), name='site_eng_tasks'),

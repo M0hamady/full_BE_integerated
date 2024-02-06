@@ -135,11 +135,37 @@ class ProfileSiteEngTasks(LoginRequiredMixin, TemplateView):
         }
 
         return render(request, self.template_name, context)
-class ProfileSiteEng(LoginRequiredMixin, TemplateView):
-    template_name = 'teamViewer/list_tasks.html'
-    # دة البيظهر الفلورز او النقط الرايسية للانجنير 
+    
+    
+
+from django.db.models import Prefetch
+
+
+class ProfileClient(LoginRequiredMixin, TemplateView):
+    template_name = 'teamViewer/clientProfile.html'
+
     def get(self, request, *args, **kwargs):
-        # Access the current user
+        current_user = request.user
+
+        try:
+            site_eng = SiteEng.objects.get(user=current_user)
+        except SiteEng.DoesNotExist:
+            raise Http404("You are not authorized as a Site Engineer.")
+
+        client_id = kwargs.get('client_id')
+        client = get_object_or_404(Client, id=client_id)
+        project = get_object_or_404(Project, client=client)
+        
+        context = {
+            'client': client,
+            'project': project
+        }
+
+        return render(request, self.template_name, context)
+class ProfileSiteEngProjects(LoginRequiredMixin, TemplateView):
+    template_name = 'teamViewer/list_projects.html'
+
+    def get(self, request, *args, **kwargs):
         current_user = request.user
 
         try:
@@ -147,8 +173,41 @@ class ProfileSiteEng(LoginRequiredMixin, TemplateView):
         except SiteEng.DoesNotExist:
             raise Http404("You are not authorized as a Site Engineer.")
         
-        floors = Floor.objects.filter(site_eng__id=site_eng.id)
+        projects = Project.objects.filter(floor__site_eng=site_eng).distinct().prefetch_related(
+            Prefetch('floor_set', queryset=Floor.objects.filter(site_eng=site_eng))
+        )
 
+        context = {
+            'projects': projects,
+            'test': "test re"
+        }
+
+        return render(request, self.template_name, context)
+    
+    
+class ProfileSiteEng(LoginRequiredMixin, TemplateView):
+    template_name = 'teamViewer/list_tasks.html'
+    
+    def get(self, request, *args, **kwargs):
+        current_user = request.user
+        
+        try:
+            site_eng = SiteEng.objects.get(user=current_user)
+            site_manager = SitesManager.objects.get(user=current_user)
+            floors = Floor.objects.filter(Q(site_eng=site_eng) | Q(site_manager=site_manager))
+        except SiteEng.DoesNotExist:
+            try:
+                site_manager = SitesManager.objects.get(user=current_user)
+                floors = Floor.objects.filter(site_manager=site_manager)
+            except SitesManager.DoesNotExist:
+                raise Http404("You are not authorized as a Site Engineer or Site Manager.")
+        except SitesManager.DoesNotExist:
+            try:
+                site_eng = SiteEng.objects.get(user=current_user)
+                floors = Floor.objects.filter(site_eng=site_eng)
+            except SiteEng.DoesNotExist:
+                raise Http404("You are not authorized as a Site Engineer or Site Manager.")
+        
         context = {
             'projects': floors,
             'test': "test re"
@@ -158,27 +217,42 @@ class ProfileSiteEng(LoginRequiredMixin, TemplateView):
     
     
 class ProfileSiteManagerProjects(LoginRequiredMixin, TemplateView):
-    template_name = 'teamViewer/list_tasks.html'
-# دة البيظهر الفلورز او النقط الرايسية للانجنير 
+    template_name = 'teamViewer/list_projects.html'
+    
     def get(self, request, *args, **kwargs):
-        # Access the current user
         current_user = request.user
-
-        try:
-            site_eng = SitesManager.objects.get(user=current_user)
-        except SiteEng.DoesNotExist:
-            raise Http404("You are not authorized as a Site Manager.")
         
-        floors = Floor.objects.filter(site_manager__id=site_eng.id)
-
+        try:
+            site_eng = SiteEng.objects.get(user=current_user)
+            site_manager = SitesManager.objects.get(user=current_user)
+            projects = Project.objects.filter(Q(floor__site_eng=site_eng) | Q(floor__site_manager=site_manager)).distinct().prefetch_related(
+                Prefetch('floor_set', queryset=Floor.objects.filter(Q(site_eng=site_eng) | Q(site_manager=site_manager)))
+            )
+        except SiteEng.DoesNotExist:
+            try:
+                site_manager = SitesManager.objects.get(user=current_user)
+                projects = Project.objects.filter(floor__site_manager=site_manager).distinct().prefetch_related(
+                    Prefetch('floor_set', queryset=Floor.objects.filter(site_manager=site_manager))
+                )
+            except SitesManager.DoesNotExist:
+                raise Http404("You are not authorized as a Site Engineer or Site Manager.")
+        except SitesManager.DoesNotExist:
+            try:
+                site_eng = SiteEng.objects.get(user=current_user)
+                projects = Project.objects.filter(floor__site_eng=site_eng).distinct().prefetch_related(
+                    Prefetch('floor_set', queryset=Floor.objects.filter(site_eng=site_eng))
+                )
+            except SiteEng.DoesNotExist:
+                raise Http404("You are not authorized as a Site Engineer or Site Manager.")
+        
         context = {
-            'projects': floors,
+            'projects': projects,
             'test': "test re"
         }
 
         return render(request, self.template_name, context)
-
-
+    
+    
 class ProfileSiteManager(LoginRequiredMixin, TemplateView):
     template_name = 'teamViewer/list_tasks.html'
 

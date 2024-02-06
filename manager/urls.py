@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ClientFilterView, CreateProjectStudyView, Login, Meeting, Monitoring2DAnd3DImagesForProject, Profile, UpdateProjectStudyView, add_ceiling_decorations, add_flooring_material, add_furniture_details, add_light_type, add_style, add_wall_decorations, create_project_studies, delete_ceiling_decorations,delete_design, delete_color,Projects,add_color, RegisterView, ProfileProjectUpdateView, delete_flooring_material, delete_furniture_details, delete_light_type, delete_wall_decorations, design_styles
+from .views import ClientFilterView, CreateProjectStudyView, Login, Meeting, Monitoring2DAnd3DImagesForProject, Profile, UpdateProjectStudyView, add_ceiling_decorations, add_flooring_material, add_furniture_details, add_light_type, add_style, add_wall_decorations, create_project_studies, delete_ceiling_decorations,delete_design, delete_color,Projects,add_color, RegisterView, ProfileProjectUpdateView, delete_flooring_material, delete_furniture_details, delete_light_type, delete_wall_decorations, design_styles, get_all_users_location, track_location
 from django.contrib.auth.views import LogoutView
 
 urlpatterns = [
@@ -30,6 +30,8 @@ urlpatterns = [
     path('client/furniture/update/<uuid:project_uuid>/<str:furniture_id>/', add_furniture_details, name='add_furniture_details'),
     path('client/furniture/delete/<uuid:project_uuid>/<int:furniture_id>/', delete_furniture_details, name='delete_furniture_details'),
     path('designs/', design_styles, name='design_styles'),
+    path('track-location/', track_location, name='track_location'),
+    path('get-all-users-location/', get_all_users_location, name='get_all_users_location'),
     
 
 ]

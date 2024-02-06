@@ -13,7 +13,44 @@ from project.models import Project
 from project.slck import send_slack_notification
 
 # from markting.models import Marketing
-
+CITIES = (
+    ('cairo', 'Cairo'),
+    ('giza', 'Giza'),
+    ('alexandria', 'Alexandria'),
+    ('beheira', 'Beheira'),
+    ('ismailia', 'Ismailia'),
+    ('luxor', 'Luxor'),
+    ('red_sea', 'Red Sea'),
+    ('daqahliyah', 'Daqahliyah'),
+    ('sharqiyah', 'Sharqiyah'),
+    ('fayoum', 'Fayoum'),
+    ('gharbiyah', 'Gharbiyah'),
+    ('ismailia', 'Ismailia'),
+    ('cairo', 'Cairo'),
+    ('qalyubia', 'Qalyubia'),
+    ('suez', 'Suez'),
+    ('sharqiyah', 'Sharqiyah'),
+    ('gharbiyah', 'Gharbiyah'),
+    ('fayoum', 'Fayoum'),
+    ('cairo', 'Cairo'),
+    ('qalyubia', 'Qalyubia'),
+    ('canal', 'Canal'),
+    ('qena', 'Qena'),
+    ('menofia', 'Menofia'),
+    ('minya', 'Minya'),
+    ('new_valley', 'New Valley'),
+    ('assiut', 'Assiut'),
+    ('aswan', 'Aswan'),
+    ('beni_suef', 'Beni Suef'),
+    ('port_said', 'Port Said'),
+    ('south_sinai', 'South Sinai'),
+    ('damietta', 'Damietta'),
+    ('sohag', 'Sohag'),
+    ('north_sinai', 'North Sinai'),
+    ('qena', 'Qena'),
+    ('kafr_el_sheikh', 'Kafr El Sheikh'),
+    ('matrouh', 'Matrouh')
+)
 class Client(models.Model):
     SOCIAL_CHOICES = [
         ('facebook', 'Facebook'),
@@ -24,13 +61,14 @@ class Client(models.Model):
         ('email', 'Email'),
         ('phone_call', 'Phone Call')
     ]
+    
     add_by = models.ForeignKey('markting.Marketing', on_delete=models.SET_NULL,null=True,blank=True)
     name = models.CharField(max_length=150)
     slack_channel_name = models.CharField(max_length=150,null=True)
     email = models.EmailField(null=True,blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True,blank=True)
     number = models.CharField(max_length=150, null=True, blank=True)
-    location = models.CharField(max_length=150, null=True, blank=True)
+    location = models.CharField(max_length=150,choices=CITIES, null=True, blank=True)
     locationLink = models.CharField(max_length=150, validators=[URLValidator(message='Enter a valid Google Maps location link.')], null=True, blank=True)
     coming_from = models.CharField(max_length=150, choices=SOCIAL_CHOICES, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True,verbose_name="Client Login License")
@@ -56,7 +94,12 @@ class Client(models.Model):
         return self.name
     
 
-    
+    def has_action(self):
+        try:
+            clientAction = ClientAction.objects.get(client=self)
+            # if clientAction.action == 'searching':
+            return True
+        except: return False
     def project_client(self):
         try:
             return Project.objects.get(client__uuid=self.uuid)
@@ -69,13 +112,15 @@ class Client(models.Model):
                     '''
         return text
     def save(self, *args, **kwargs):
-        current_datetime = datetime.now()
         is_new_client = self.pk is None
-        send_slack_notification("#new-customers",self.generate_welcome_message())
-        send_slack_notification("#mo3aynat",self.viewer_message())
+        if is_new_client:
+            send_slack_notification("#new-customers",self.generate_welcome_message())
+            send_slack_notification("#mo3aynat",self.viewer_message())
         if self.slack_channel_name is not None and not self.slack_channel_name.startswith("#"):
             self.slack_channel_name = f"#{self.slack_channel_name}"  # Check if it's a new client (not yet saved)  # Check if it's a new client (not yet saved)
         super().save(*args, **kwargs)  # Save the client first
+        send_slack_notification("#customer-service",self.generate_welcome_message())
+        
     def action_needed(self):
         
         if not self.is_viewer_viewed:
@@ -192,6 +237,13 @@ Welcome to https://support-constructions.com.
 
 to get your access visit our provider: https://www.backend.support-constructions.com/website/ClientUuid/{self.uuid}"""
         return message
+    def generate_welcome_message_for_customerService(self):
+        message = f"""Hello {self.name}!
+
+new client added 
+
+to get access to clint : https://www.backend.support-constructions.com/website/ClientUuid/{self.uuid}"""
+        return message
     @property
     def calculate_data_completion_percentage(self):
         conditions = {
@@ -233,6 +285,56 @@ to get your access visit our provider: https://www.backend.support-constructions
     @property
     def is_under_expenditure_limit(self):
         return self.total_payments < self.maximum_expenditure
+    
+    def client_action_notes(self):
+        try:
+            action = ClientAction.objects.filter(client=self).order_by('-id').first()
+            if action:
+                return action
+            else:
+                return "no action"
+        except ClientAction.DoesNotExist:
+            return "no action"
+
+
+class ClientAction(models.Model):
+    ACTION_CHOICES = [
+        ('searching', 'Searching for services'),
+        ('future', 'Interested in future services'),
+        ('working', 'Considering working with us')
+    ]
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    notes = models.TextField(blank=True,null=True)
+    created_date = models.DateTimeField(auto_now_add=True,null=True,blank=True)
+    is_reported = models.BooleanField(default= False)
+    is_viewer_seen = models.BooleanField(default= False)
+    is_tech_seen = models.BooleanField(default= False)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    
+    def __str__(self):
+        return f'{self.client.name} - {self.get_action_display()}'
+    def save(self, *args, **kwargs):
+        is_new_action = self.pk is None  # Check if it's a new action
+        super().save(*args, **kwargs)
+        if self.action == 'working' and not self.is_reported:
+            send_slack_notification("#customer-service-notes-and-actions", self.get_powerful_arabic_message())
+            if self.action != 'working': 
+                send_slack_notification("#customer-service-notes-and-actions", self.get_powerful_arabic_message2())
+    def get_powerful_arabic_message(self):
+        if self.action == 'working':
+            client_name = self.client.name
+            message = f"عميل جديد: {client_name} يفكر في العمل معنا."
+            return f":rocket: :muscle: :star2: {message}"
+        return None
+    def get_powerful_arabic_message2(self):
+        if self.action == 'working':
+            client_name = self.client.name
+            message = f"عميل: {client_name} تم تغير حالة العميل الي مهتم بالعمل معنا شكرا للعمل الجاد ."
+            return f":rocket: :muscle: :star2: {message}"
+        return None
+
 class Contact(models.Model):
     name = models.CharField(max_length=255)
     email = models.EmailField()
